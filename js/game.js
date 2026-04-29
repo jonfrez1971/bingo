@@ -143,6 +143,31 @@ function setupFirebaseSync() {
         }, (error) => {
             console.error("Error en sincronización Firebase:", error);
         });
+
+    // Listen for the game state (drawn balls)
+    window.db_firebase.collection("juego").doc("estado")
+        .onSnapshot((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                calledNumbers = data.bolas || [];
+                jackpot = data.jackpot || 10000;
+                roundNumber = data.ronda || 1;
+                
+                updateUI();
+                renderPlayers(); // This will mark the numbers in real-time
+            }
+        });
+}
+
+function syncGameState() {
+    if (!window.db_firebase || isPlayerMode) return;
+    
+    window.db_firebase.collection("juego").doc("estado").set({
+        bolas: calledNumbers,
+        jackpot: jackpot,
+        ronda: roundNumber,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(err => console.error("Error sync bolas:", err));
 }
 
 let audioCtx;
@@ -310,6 +335,9 @@ function addPlayer() {
         return;
     }
 
+    // Recordar nombre en este dispositivo
+    localStorage.setItem('bingo_my_name', name);
+    
     // Verificar si el nombre ya existe
     const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
     if (exists) {
@@ -363,18 +391,31 @@ function removePlayer(id) {
 
 function renderPlayers() {
     playersGrid.innerHTML = '';
-    playersCountTitle.textContent = `Jugadores (${players.length})`;
     
-    players.forEach((p, index) => {
+    // En modo jugador, queremos que NUESTRO cartón salga primero
+    const myName = localStorage.getItem('bingo_my_name');
+    
+    // Ordenar: mi cartón primero, luego los demás
+    const sortedPlayers = [...players].sort((a, b) => {
+        if (a.name === myName) return -1;
+        if (b.name === myName) return 1;
+        return 0;
+    });
+
+    sortedPlayers.forEach((p, index) => {
         const card = document.createElement('div');
         card.className = 'player-card';
+        if (p.name === myName) card.classList.add('my-card'); // Clase especial para resaltar
         card.id = `player-card-${p.id || p.cardId}`;
         
         const isPending = p.status === 'pendiente_pago';
         
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name" style="white-space: normal; overflow: visible;">${isPending ? '⏳ ' : ''}${p.name}</span>
+                <span class="player-card-name" style="white-space: normal; overflow: visible;">
+                    ${p.name === myName ? '⭐ ' : ''}${isPending ? '⏳ ' : ''}${p.name}
+                </span>
+                ${p.name === myName ? '<span style="font-size:0.5rem; color:#00f0ff; font-weight:bold;">MI CARTÓN</span>' : ''}
                 ${isPending ? '<span style="font-size:0.5rem; color:var(--accent); font-weight:bold; display:block;">PAGO PENDIENTE</span>' : ''}
                 <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left: auto;">🗑️</button>
             </div>
@@ -433,6 +474,7 @@ function startNewRound() {
     
     drawnBalls = [];
     isRoundFinished = false;
+    syncGameState(); // Limpiar bolas en Firebase para la nueva ronda
     currentBallEl.textContent = '--';
     currentBallEl.classList.remove('pulse');
     
@@ -576,6 +618,7 @@ function drawBall() {
     do { nextBall = Math.floor(Math.random() * 90) + 1; } while (drawnBalls.includes(nextBall));
 
     drawnBalls.push(nextBall);
+    syncGameState(); // Enviar a Firebase para que los jugadores lo vean en vivo
     
     void currentBallEl.offsetWidth; 
     currentBallEl.textContent = nextBall;
