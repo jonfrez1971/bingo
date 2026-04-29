@@ -36,17 +36,19 @@ let raffleWinnerIds = [];
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
-// Sincronización Firebase
+// Firebase Sync
 function setupFirebaseSync() {
     if (!window.db_firebase) return;
 
-    // Escuchar jugadores
+    // Escuchar jugadores con persistencia forzada
     window.db_firebase.collection("jugadores").onSnapshot((snap) => {
         players = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderPlayers();
-    }, err => console.error("Error Firebase:", err));
+    }, err => {
+        console.error("Error Firebase:", err);
+    });
 
-    // Escuchar estado del juego
+    // Escuchar estado del juego y forzar UI
     window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
         if (doc.exists) {
             const d = doc.data();
