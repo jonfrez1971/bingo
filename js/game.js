@@ -267,38 +267,37 @@ function addPlayer() {
     
     const BOLD_LINK = "https://checkout.bold.co/payment/LNK_TYRW5PQ2S8";
     
-    // Hablar ANTES de redirigir para asegurar que se escuche
+    // Hablar inmediatamente
     if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Detener cualquier voz previa
-        const msg = new SpeechSynthesisUtterance(`Bienvenido al juego, ${name}. Por favor completa tu pago de 4 mil pesos en la nueva pestaña que se va a abrir.`);
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(`Bienvenido, ${name}. Procede al pago en la nueva pestaña.`);
         msg.lang = 'es-ES';
-        msg.rate = 0.9;
         window.speechSynthesis.speak(msg);
     }
 
-    setTimeout(() => {
-        const confirmPayment = confirm(`¿Deseas inscribirte como ${name}? Se abrirá Bold para el pago.`);
-        
-        if (confirmPayment) {
-            if (window.db_firebase) {
-                window.db_firebase.collection("jugadores").add({
-                    name: name,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    status: 'pendiente_pago'
-                }).then(() => {
-                    playerNameInput.value = '';
-                    window.open(BOLD_LINK, '_blank');
-                });
-            } else {
-                const id = Date.now();
-                players.push({ id, name, status: 'pendiente_pago' });
-                localStorage.setItem('bingo_players_list', JSON.stringify(players));
+    // Abrir Bold INMEDIATAMENTE para evitar el bloqueador de popups
+    const confirmPayment = confirm(`¿Inscribir a ${name} y abrir pasarela de pago?`);
+    
+    if (confirmPayment) {
+        // Abrir pestaña de Bold primero
+        window.open(BOLD_LINK, '_blank');
+
+        if (window.db_firebase) {
+            window.db_firebase.collection("jugadores").add({
+                name: name,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                status: 'pendiente_pago'
+            }).then(() => {
                 playerNameInput.value = '';
-                renderPlayers();
-                window.open(BOLD_LINK, '_blank');
-            }
+            });
+        } else {
+            const id = Date.now();
+            players.push({ id, name, status: 'pendiente_pago' });
+            localStorage.setItem('bingo_players_list', JSON.stringify(players));
+            playerNameInput.value = '';
+            renderPlayers();
         }
-    }, 500); // Pequeña espera para que la voz empiece
+    }
 }
 
 function openBoldCheckout() {
