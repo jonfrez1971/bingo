@@ -125,16 +125,26 @@ const isPlayerMode = urlParams.get('mode') === 'player';
 // Firebase Sync
 let lastPlayersCount = 0;
 function setupFirebaseSync() {
-    if (!window.db_firebase) return;
-
-    window.db_firebase.collection("jugadores").orderBy("timestamp", "asc")
+    // Listen for players in real-time
+    window.db_firebase.collection("jugadores")
         .onSnapshot((snapshot) => {
+            console.log("Cambio detectado en Firebase. Jugadores:", snapshot.size);
             const newPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) playCashSound();
+            
+            // Ordenar por timestamp localmente para evitar errores de Firebase
+            newPlayers.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+
+            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) {
+                playCashSound();
+            }
+            
             players = newPlayers;
             lastPlayersCount = players.length;
             renderPlayers();
             updateUI();
+        }, (error) => {
+            console.error("Error en sincronización Firebase:", error);
+            alert("Error de conexión con la base de datos. Reintenta.");
         });
 
     window.db_firebase.collection("juego").doc("estado")
