@@ -76,7 +76,6 @@ function setupFirebaseSync() {
             const raffleActive = d.raffleActive || false;
             const isSpinning = d.isSpinning || false;
 
-            // Sincronizar Sorteo Acumulado
             const rOverlay = document.getElementById('raffleOverlay');
             const rName = document.getElementById('raffleName');
             if (raffleActive && !isRaffleActive) {
@@ -88,13 +87,11 @@ function setupFirebaseSync() {
             }
             isRaffleActive = raffleActive;
 
-            // Sincronizar Balotera Girando
             if (bingoCage) {
                 if (isSpinning) bingoCage.classList.add('spinning');
                 else bingoCage.classList.remove('spinning');
             }
 
-            // Cantar la bola nueva
             if (newBalls.length > drawnBalls.length) {
                 const latestBall = newBalls[newBalls.length - 1];
                 if (latestBall !== lastBallSpoken) {
@@ -205,6 +202,10 @@ function startNewRound() {
     drawnBalls = [];
     isRoundFinished = false;
     winnerInfo = null;
+
+    // AUMENTAR ACUMULADO: 1000 por cada jugador
+    jackpot += players.length * 1000;
+
     currentRound = db.createRonda(jackpot);
     roundNumber = currentRound.ronda_id;
 
