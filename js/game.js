@@ -479,61 +479,38 @@ function generateRandomCard(count) {
 function startNewRound() {
     const numPerCard = 5;
     
+    if (players.length === 0) {
+        alert("¡Agrega al menos 1 jugador para empezar!");
+        return;
+    }
+
     startBtn.disabled = true;
     document.querySelector('main').classList.add('playing-mode');
     
     drawnBalls = [];
     isRoundFinished = false;
-    syncGameState(); // Limpiar bolas en Firebase para la nueva ronda
     currentBallEl.textContent = '--';
-    currentBallEl.classList.remove('pulse');
     
+    // Resetear tablero maestro
     for (let i = 1; i <= 90; i++) {
         const mc = document.getElementById(`master-cell-${i}`);
         if(mc) mc.classList.remove('called');
     }
-    
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    
-    // Lógica de Acumulado: Buscar la última ronda para ver si se ganó el premio mayor
-    const lastRound = db.getLastRonda();
-    if (lastRound) {
-        const history = db.getHistorialGanadores();
-        const lastWinnerEntry = history.find(h => h.ronda_id === lastRound.ronda_id);
-        
-        // Verificamos si el ganador de la ronda anterior estaba en el sorteo (raffleWinnerIds de esa ronda)
-        // En nuestro sistema simplificado, si el premio registrado fue mayor al basePrize, es que ganó el acumulado.
-        const basePrizeLast = (db.getParticipantesByRonda(lastRound.ronda_id).length * 4000) * 0.7;
-        const wasJackpotWon = lastWinnerEntry && lastWinnerEntry.premio > (basePrizeLast + 100);
 
-        if (wasJackpotWon || lastRound.estado === 'nuevo') {
-            jackpot = 10000;
-        } else {
-            jackpot = (lastRound.acumulado || 10000) + 5000;
-        }
-    } else {
-        jackpot = 10000;
-    }
-
+    // Lógica de Ronda
     currentRound = db.createRonda(jackpot);
     updateUI();
+    syncGameState();
 
     participants = [];
-    if (players.length === 0) {
-        alert("¡Agrega al menos 1 jugador!");
-        document.querySelector('main').classList.remove('playing-mode');
-        return;
-    }
-
     players.forEach((playerObj) => {
         const carton = generateRandomCard(numPerCard);
         
-        // Actualizar en Firebase para que el jugador vea su cartón
         if (window.db_firebase) {
             window.db_firebase.collection("jugadores").doc(playerObj.id).update({
                 carton: carton,
                 status: 'jugando'
-            });
+            }).catch(err => console.error("Error sync carton:", err));
         }
 
         let user = db.getAllUsers().find(u => u.nombre === playerObj.name);
@@ -545,11 +522,6 @@ function startNewRound() {
         } catch(e) { console.error(e); }
     });
 
-    const validSlots = participants.length;
-
-    basePrize = (validSlots * 4000) * 0.7;
-
-    // Seleccionamos 2 jugadores para el acumulado (según solicitud)
     const shuffled = [...participants].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, Math.min(participants.length, 2));
     raffleWinnerIds = selected.map(p => p.user_id);
