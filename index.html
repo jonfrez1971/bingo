@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Spress Líneas</title>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- PWA Settings for Mobile App -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#8a2be2">
+    <link rel="apple-touch-icon" href="img/icon-512.png">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <h1 contenteditable="true" title="Clic para personalizar nombre">Bingo Spress Líneas</h1>
+        </div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="version-tag" style="font-size: 0.7rem; color: var(--accent); background: rgba(255,0,127,0.1); padding: 2px 8px; border-radius: 10px; border: 1px solid var(--accent); margin-bottom: 5px; text-align: center;">Casino Mode v2.0</div>
+                    <div class="status-label">Acumulado Actual</div>
+                    <div class="status-value" id="jackpotDisplay">$10,000</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Ronda</div>
+                    <div class="status-value" id="roundDisplay">#--</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Left Column: Game Control & Stats -->
+        <aside class="caller-section glass-panel">
+            <div class="current-ball-container">
+                <div class="status-label">Sorteando Número...</div>
+                <div class="bingo-cage-container" id="bingoCageContainer">
+                    <div class="bingo-cage" id="bingoCage"></div>
+                    <div class="current-ball" id="currentBall" style="opacity: 0;">--</div>
+                </div>
+            </div>
+
+            <div>
+                <div class="status-label" style="text-align: center; margin-bottom: 10px;">Tablero Maestro (1-90)</div>
+                <div class="master-board" id="masterBoard"></div>
+            </div>
+
+            <!-- Bold & Nequi Section -->
+            <div class="glass-panel" style="background: rgba(138, 43, 226, 0.2); border: 2px solid var(--primary); text-align: center; padding: 15px;">
+                <div class="status-label" style="color: #fff; font-weight: bold; letter-spacing: 2px;">Entrada al Juego</div>
+                <div style="font-size: 1.1rem; margin: 5px 0; color: white;">Valor Ronda: <strong style="color: var(--secondary); font-size: 1.3rem;">$4,000</strong></div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <button class="btn" style="background: #ff007f; font-size: 0.9rem; padding: 8px;" onclick="openBoldCheckout()">Pagar con BOLD</button>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">O transfiere a Nequi:</div>
+                    <div contenteditable="true" style="font-size: 1.5rem; color: var(--accent); font-weight: 900; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 5px; border: 1px dashed var(--accent); outline: none;">31X XXX XXXX</div>
+                </div>
+            </div>
+            
+            <!-- Raffle Section -->
+            <div class="raffle-box glass-panel" style="padding: 15px;">
+                <div class="status-label">Sorteo Acumulado</div>
+                <div class="raffle-name" id="raffleName" style="font-size: 1.2rem; margin: 10px 0;">--</div>
+                <p style="font-size:0.75rem; color: var(--text-muted);">Si este jugador gana el bingo, ¡se lleva el Acumulado!</p>
+            </div>
+            
+            <!-- Winners Section -->
+            <div style="margin-top: 10px;">
+                <div class="status-label">Últimos Ganadores</div>
+                <div id="winnersList" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Winners history -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Column: Players & Cards -->
+        <section class="players-section">
+            <div class="section-header" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <div class="section-title" id="playersCountTitle">Jugadores (0)</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" id="startBtn">Iniciar Nueva Ronda</button>
+                    </div>
+                </div>
+                
+                <!-- Dynamic Player Registration -->
+                <div class="registration-box glass-panel" style="width: 100%; display: flex; gap: 10px; padding: 15px; border: 1px solid var(--secondary);">
+                    <input type="text" id="playerNameInput" class="player-input" placeholder="Tu Nombre para jugar" style="flex: 1;">
+                    <button id="addPlayerBtn" class="btn" style="padding: 10px 20px; background: var(--secondary); color: #000;">Pagar y Entrar</button>
+                </div>
+            </div>
+            
+            <div class="cards-grid" id="playersGrid">
+                <!-- Player cards will be injected here -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Winner Overlay -->
+    <div class="winner-overlay" id="winnerOverlay">
+        <div class="winner-title" id="winnerMainTitle">¡BINGO!</div>
+        <div style="font-size: 1.5rem; color: #fff; margin-bottom: 10px;" id="winnerSubTitle">El jugador ha completado su cartón.</div>
+        <div class="winner-name" id="winnerName">Jugador 1</div>
+        <div class="winner-prize" id="winnerPrize">Premio: $0</div>
+        
+        <div style="display: flex; gap: 15px; margin-top: 20px;">
+            <button class="btn" id="nextRoundBtn">Continuar</button>
+        </div>
+    </div>
+
+    <!-- Raffle Pre-Show Overlay -->
+    <div class="winner-overlay" id="raffleOverlay">
+        <div style="text-align: center;">
+            <div class="winner-title" style="font-size: 3rem; margin-bottom: 10px; color: var(--accent);">Sorteando Acumulado...</div>
+            <div style="font-size: 1.5rem; color: #fff; margin-bottom: 30px;">Seleccionando al jugador que competirá por el Premio Mayor</div>
+            <div class="winner-name" style="font-size: 4rem; animation: pulse 0.5s infinite alternate;" id="raffleSpinnerText">...</div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        // CONFIGURACIÓN DE FIREBASE (El usuario debe pegar sus llaves aquí)
+        const firebaseConfig = {
+            apiKey: "PEGA_AQUI_TU_API_KEY",
+            authDomain: "TU_PROYECTO.firebaseapp.com",
+            projectId: "TU_PROYECTO_ID",
+            storageBucket: "TU_PROYECTO.appspot.com",
+            messagingSenderId: "TU_ID",
+            appId: "TU_APP_ID"
+        };
+
+        // Inicializar Firebase solo si las llaves no son placeholders
+        if (firebaseConfig.apiKey !== "PEGA_AQUI_TU_API_KEY") {
+            firebase.initializeApp(firebaseConfig);
+            window.db_firebase = firebase.firestore();
+            console.log("Firebase Conectado");
+        }
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('PWA Service Worker Registrado'))
+                .catch(err => console.error('Error registrando Service Worker:', err));
+            });
+        }
+    </script>
+    <script src="js/game.js"></script>
+</body>
+</html>
