@@ -1,163 +1,62 @@
-// DB Simulation Logic
+// DB Simulation (Local Storage Backup)
 const DB_KEY = 'bingo_db_v1';
 const defaultSchema = { usuarios: [], rondas: [], participantes: [], sorteos: [], historialGanadores: [] };
 
-function initDB() {
-    if (!localStorage.getItem(DB_KEY)) {
-        localStorage.setItem(DB_KEY, JSON.stringify(defaultSchema));
-    }
-}
-
-function getTable(tableName) {
-    const dbData = JSON.parse(localStorage.getItem(DB_KEY));
-    return dbData[tableName] || [];
-}
-
-function saveTable(tableName, data) {
-    const dbData = JSON.parse(localStorage.getItem(DB_KEY));
-    dbData[tableName] = data;
-    localStorage.setItem(DB_KEY, JSON.stringify(dbData));
-}
-
-function generateId(tableName, idField) {
-    const table = getTable(tableName);
-    if (table.length === 0) return 1;
-    return Math.max(...table.map(row => row[idField])) + 1;
-}
+function initDB() { if (!localStorage.getItem(DB_KEY)) localStorage.setItem(DB_KEY, JSON.stringify(defaultSchema)); }
+function getTable(t) { initDB(); const d = JSON.parse(localStorage.getItem(DB_KEY)); return d[t] || []; }
+function saveTable(t, data) { const d = JSON.parse(localStorage.getItem(DB_KEY)); d[t] = data; localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+function generateId(t, f) { const table = getTable(t); return table.length ? Math.max(...table.map(r => r[f])) + 1 : 1; }
 
 const db = {
-    createUser(nombre, email = '') {
-        initDB();
-        const table = getTable('usuarios');
-        const newUser = { user_id: generateId('usuarios', 'user_id'), nombre, email, fecha_registro: new Date().toISOString() };
-        table.push(newUser);
-        saveTable('usuarios', table);
-        return newUser;
-    },
+    createUser(nombre) { const table = getTable('usuarios'); const newUser = { user_id: generateId('usuarios', 'user_id'), nombre }; table.push(newUser); saveTable('usuarios', table); return newUser; },
     getAllUsers() { return getTable('usuarios'); },
-    createRonda(acumulado) {
-        initDB();
-        const table = getTable('rondas');
-        const newRonda = { ronda_id: generateId('rondas', 'ronda_id'), fecha_inicio: new Date().toISOString(), fecha_fin: null, acumulado: acumulado, ganador_id: null, estado: 'en curso', max_jugadores: 30 };
-        table.push(newRonda);
-        saveTable('rondas', table);
-        return newRonda;
-    },
-    updateRonda(ronda_id, updates) {
-        const table = getTable('rondas');
-        const index = table.findIndex(r => r.ronda_id === ronda_id);
-        if (index !== -1) {
-            table[index] = { ...table[index], ...updates };
-            saveTable('rondas', table);
-        }
-    },
-    getLastRonda() {
-        const table = getTable('rondas');
-        return table[table.length - 1];
-    },
-    addParticipante(ronda_id, user_id, carton) {
-        const table = getTable('participantes');
-        const newPart = { participante_id: generateId('participantes', 'participante_id'), ronda_id, user_id, carton };
-        table.push(newPart);
-        saveTable('participantes', table);
-        return newPart;
-    },
-    getParticipantesByRonda(ronda_id) {
-        return getTable('participantes').filter(p => p.ronda_id === ronda_id);
-    },
-    createSorteo(ronda_id, numero_sorteado, ganador_sorteo) {
-        const table = getTable('sorteos');
-        const newSorteo = { sorteo_id: generateId('sorteos', 'sorteo_id'), ronda_id, numero_sorteado, ganador_sorteo };
-        table.push(newSorteo);
-        saveTable('sorteos', table);
-        return newSorteo;
-    },
-    addHistorialGanador(ronda_id, user_id, premio) {
-        const table = getTable('historialGanadores');
-        const newHist = { historial_id: generateId('historialGanadores', 'historial_id'), ronda_id, user_id, premio, fecha: new Date().toISOString() };
-        table.push(newHist);
-        saveTable('historialGanadores', table);
-        return newHist;
-    },
+    createRonda(acumulado) { const table = getTable('rondas'); const newRonda = { ronda_id: generateId('rondas', 'ronda_id'), acumulado }; table.push(newRonda); saveTable('rondas', table); return newRonda; },
+    addParticipante(r, u, c) { const table = getTable('participantes'); const n = { participante_id: generateId('participantes', 'participante_id'), ronda_id: r, user_id: u, carton: c }; table.push(n); saveTable('participantes', table); return n; },
+    createSorteo(r, p, u) { const table = getTable('sorteos'); const n = { sorteo_id: generateId('sorteos', 'sorteo_id'), ronda_id: r, participante_id: p, user_id: u }; table.push(n); saveTable('sorteos', table); return n; },
     getHistorialGanadores() { return getTable('historialGanadores'); }
 };
 
-initDB();
-
-// DOM ELEMENTS
+// DOM Elements
 const startBtn = document.getElementById('startBtn');
 const clearPlayersBtn = document.getElementById('clearPlayersBtn');
-const raffleOverlay = document.getElementById('raffleOverlay');
-const raffleSpinnerText = document.getElementById('raffleSpinnerText');
+const playersGrid = document.getElementById('playersGrid');
+const playerNameInput = document.getElementById('playerNameInput');
+const currentBallEl = document.getElementById('currentBall');
 const jackpotDisplay = document.getElementById('jackpotDisplay');
 const roundDisplay = document.getElementById('roundDisplay');
-const playersCountTitle = document.getElementById('playersCountTitle');
-const currentBallEl = document.getElementById('currentBall');
-const raffleNameEl = document.getElementById('raffleName');
-const winnersList = document.getElementById('winnersList');
-const winnerOverlay = document.getElementById('winnerOverlay');
-const winnerMainTitle = document.getElementById('winnerMainTitle');
-const winnerSubTitle = document.getElementById('winnerSubTitle');
-const winnerNameEl = document.getElementById('winnerName');
-const winnerPrizeEl = document.getElementById('winnerPrize');
-const nextRoundBtn = document.getElementById('nextRoundBtn');
-const introBtn = document.getElementById('introBtn');
-const announcerSubtitle = document.getElementById('announcerSubtitle');
-const playerNameInput = document.getElementById('playerNameInput');
-const addPlayerBtn = document.getElementById('addPlayerBtn');
-const playersGrid = document.getElementById('playersGrid');
 
-// GLOBALS
-let currentRound = null;
-let participants = [];
+// Global State
+let players = [];
 let drawnBalls = [];
-let drawInterval = null;
-let jackpot = 10000;
-let basePrize = 4000;
-let raffleWinnerIds = [];
-let isRoundFinished = false;
-let players = []; 
 let roundNumber = 1;
+let jackpot = 10000;
+let isRoundFinished = false;
+let participants = [];
+let raffleWinnerIds = [];
 
-const urlParams = new URLSearchParams(window.location.search);
-const isPlayerMode = urlParams.get('mode') === 'player';
+const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
-// Firebase Sync
-let lastPlayersCount = 0;
+// Sincronización Firebase
 function setupFirebaseSync() {
-    // Listen for players in real-time
-    window.db_firebase.collection("jugadores")
-        .onSnapshot((snapshot) => {
-            console.log("Cambio detectado en Firebase. Jugadores:", snapshot.size);
-            const newPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // Ordenar por timestamp localmente para evitar errores de Firebase
-            newPlayers.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+    if (!window.db_firebase) return;
 
-            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) {
-                playCashSound();
-            }
-            
-            players = newPlayers;
-            lastPlayersCount = players.length;
-            renderPlayers();
+    // Escuchar jugadores
+    window.db_firebase.collection("jugadores").onSnapshot((snap) => {
+        players = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderPlayers();
+    }, err => console.error("Error Firebase:", err));
+
+    // Escuchar estado del juego
+    window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
+        if (doc.exists) {
+            const d = doc.data();
+            drawnBalls = d.bolas || [];
+            jackpot = d.jackpot || 10000;
+            roundNumber = d.ronda || 1;
             updateUI();
-        }, (error) => {
-            console.error("Error en sincronización Firebase:", error);
-            alert("Error de conexión con la base de datos. Reintenta.");
-        });
-
-    window.db_firebase.collection("juego").doc("estado")
-        .onSnapshot((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                drawnBalls = data.bolas || [];
-                jackpot = data.jackpot || 10000;
-                roundNumber = data.ronda || 1;
-                updateUI();
-                renderPlayers();
-            }
-        });
+            renderPlayers();
+        }
+    });
 }
 
 function syncGameState() {
@@ -165,208 +64,120 @@ function syncGameState() {
     window.db_firebase.collection("juego").doc("estado").set({
         bolas: drawnBalls,
         jackpot: jackpot,
-        ronda: roundNumber,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        ronda: roundNumber
     });
 }
 
 async function clearAllPlayers() {
-    if (!confirm("¿Seguro que quieres borrar a todos los jugadores? Esto reseteará la mesa.")) return;
-    if (window.db_firebase) {
-        const batch = window.db_firebase.batch();
-        const snapshot = await window.db_firebase.collection("jugadores").get();
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        alert("Mesa limpia. Todos los jugadores eliminados.");
-    }
-}
-
-// Audio logic
-let audioCtx;
-function getAudioCtx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-}
-
-function playMixingSound(durationMs) {
-    const ctx = getAudioCtx();
-    const startTime = ctx.currentTime;
-    const duration = durationMs / 1000;
-    const bufferSize = ctx.sampleRate * duration;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1200, startTime);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.15, startTime + 0.1);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
-    noise.start(startTime); noise.stop(startTime + duration);
-}
-
-function playCashSound() {
-    const ctx = getAudioCtx();
-    const now = ctx.currentTime;
-    const osc1 = ctx.createOscillator();
-    const g1 = ctx.createGain();
-    osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(1500, now);
-    g1.gain.setValueAtTime(0.1, now);
-    g1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    osc1.connect(g1); g1.connect(ctx.destination);
-    osc1.start(now); osc1.stop(now + 0.3);
+    if (!confirm("¿Borrar todos los jugadores?")) return;
+    const snap = await window.db_firebase.collection("jugadores").get();
+    const batch = window.db_firebase.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
 }
 
 function renderPlayers() {
     playersGrid.innerHTML = '';
     const myName = localStorage.getItem('bingo_my_name');
-    const sorted = [...players].sort((a,b) => (a.name === myName ? -1 : b.name === myName ? 1 : 0));
-
-    sorted.forEach((p) => {
+    
+    players.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'player-card' + (p.name === myName ? ' my-card' : '');
-        card.id = `player-card-${p.id}`;
-        
         const carton = p.carton || [];
         let hits = 0;
-        let numbersHtml = carton.length ? carton.map(n => {
-            const isMarked = drawnBalls.includes(n);
-            if (isMarked) hits++;
-            return `<div class="number-capsule ${isMarked ? 'marked' : ''}">${n}</div>`;
+        let nums = carton.length ? carton.map(n => {
+            const m = drawnBalls.includes(n);
+            if (m) hits++;
+            return `<div class="number-capsule ${m ? 'marked' : ''}">${n}</div>`;
         }).join('') : '<div class="number-capsule">-</div>'.repeat(5);
 
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name">${p.name === myName ? '⭐ ' : ''}${p.status==='pendiente_pago' ? '⏳ ' : ''}${p.name}</span>
-                ${p.name === myName ? '<span style="font-size:0.5rem; color:#00f0ff;">MI CARTÓN</span>' : ''}
-                <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left:auto">🗑️</button>
+                <span>${p.name === myName ? '⭐ ' : ''}${p.name}</span>
+                <button onclick="removePlayer('${p.id}')" style="margin-left:auto; background:none; border:none; color:white; cursor:pointer;">🗑️</button>
             </div>
-            <div class="card-numbers">${numbersHtml}</div>
-            <div class="progress-info"><span>Progreso</span><span>${hits}/5</span></div>
-            <div class="progress-container"><div class="progress-bar" style="width:${(hits/5)*100}%"></div></div>
+            <div class="card-numbers">${nums}</div>
+            <div style="font-size:0.7rem; margin-top:5px;">Progreso: ${hits}/5</div>
         `;
         playersGrid.appendChild(card);
     });
-    if (playersCountTitle) playersCountTitle.textContent = `Jugadores (${players.length})`;
+    const title = document.getElementById('playersCountTitle');
+    if (title) title.textContent = `Jugadores (${players.length})`;
+}
+
+function addPlayer() {
+    const name = playerNameInput.value.trim();
+    if (!name) return alert("Escribe tu nombre");
+    localStorage.setItem('bingo_my_name', name);
+    if (confirm(`¿Inscribir a ${name} y pagar?`)) {
+        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+        window.db_firebase.collection("jugadores").add({
+            name: name,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            status: 'pendiente'
+        });
+        playerNameInput.value = '';
+    }
 }
 
 function startNewRound() {
-    if (players.length === 0) { alert("¡Agrega jugadores!"); return; }
+    if (players.length === 0) return alert("No hay jugadores");
     startBtn.disabled = true;
-    document.querySelector('main').classList.add('playing-mode');
     drawnBalls = [];
     isRoundFinished = false;
-    currentBallEl.textContent = '--';
-    
-    for (let i = 1; i <= 90; i++) {
-        const mc = document.getElementById(`master-cell-${i}`);
-        if(mc) mc.classList.remove('called');
-    }
-
     currentRound = db.createRonda(jackpot);
     roundNumber = currentRound.ronda_id;
-    updateUI();
     syncGameState();
 
     participants = [];
-    players.forEach((pObj) => {
-        const carton = Array.from({length: 5}, () => Math.floor(Math.random() * 90) + 1).sort((a,b)=>a-b);
-        if (window.db_firebase) {
-            window.db_firebase.collection("jugadores").doc(pObj.id).update({ carton, status: 'jugando' });
-        }
-        let user = db.getAllUsers().find(u => u.nombre === pObj.name) || db.createUser(pObj.name);
+    players.forEach(pObj => {
+        const carton = Array.from({length:5},()=>Math.floor(Math.random()*90)+1).sort((a,b)=>a-b);
+        window.db_firebase.collection("jugadores").doc(pObj.id).update({ carton, status: 'jugando' });
+        const user = db.createUser(pObj.name);
         const p = db.addParticipante(currentRound.ronda_id, user.user_id, carton);
-        participants.push({ ...p, name: user.nombre, cardId: pObj.id, warningsGiven: [] });
+        participants.push({...p, name: user.nombre, cardId: pObj.id});
     });
 
-    const selected = [...participants].sort(() => 0.5 - Math.random()).slice(0, 2);
+    const selected = [...participants].sort(()=>0.5-Math.random()).slice(0,2);
     raffleWinnerIds = selected.map(p => p.user_id);
-    selected.forEach(p => {
-        db.createSorteo(currentRound.ronda_id, p.participante_id, p.user_id);
-        const cardEl = document.getElementById(`player-card-${p.cardId}`);
-        if (cardEl) cardEl.style.borderColor = "var(--accent)";
-    });
+    const raffleEl = document.getElementById('raffleName');
+    if (raffleEl) raffleEl.textContent = selected.map(p=>p.name).join(' y ');
     
-    raffleNameEl.textContent = selected.map(p => p.name).join(' y ');
-    startPreShowRaffle(raffleNameEl.textContent);
-}
-
-function startPreShowRaffle(winnerName) {
-    raffleOverlay.classList.add('active');
-    let ticks = 0;
-    const interval = setInterval(() => {
-        raffleSpinnerText.textContent = participants[Math.floor(Math.random() * participants.length)].name;
-        if (++ticks >= 20) {
-            clearInterval(interval);
-            raffleSpinnerText.textContent = "¡" + winnerName + "!";
-            setTimeout(() => {
-                raffleOverlay.classList.remove('active');
-                drawInterval = setTimeout(spinCageAndDraw, 2000);
-            }, 4000);
-        }
-    }, 100);
-}
-
-function spinCageAndDraw() {
-    if (drawnBalls.length >= 90 || isRoundFinished) return;
-    const cage = document.getElementById('bingoCage');
-    if (cage) cage.classList.add('spinning');
-    playMixingSound(2000);
-    setTimeout(() => {
-        if (cage) cage.classList.remove('spinning');
-        drawBall(); 
-    }, 2000); 
+    // Iniciar dibujo
+    setTimeout(drawBall, 3000);
 }
 
 function drawBall() {
-    if (drawnBalls.length >= 90 || isRoundFinished) {
-        clearTimeout(drawInterval);
-        return;
-    }
+    if (isRoundFinished || drawnBalls.length >= 90) return;
     let ball;
-    do { ball = Math.floor(Math.random() * 90) + 1; } while (drawnBalls.includes(ball));
+    do { ball = Math.floor(Math.random()*90)+1; } while (drawnBalls.includes(ball));
     drawnBalls.push(ball);
     syncGameState();
     currentBallEl.textContent = ball;
-    currentBallEl.classList.add('pulse');
-    setTimeout(() => currentBallEl.classList.remove('pulse'), 500);
     
+    // Hablar
+    if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(ball.toString()));
+
+    // Marcar en tablero
     const mc = document.getElementById(`master-cell-${ball}`);
     if (mc) mc.classList.add('called');
-    
-    if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(ball.toString());
-        u.lang = 'es-ES'; window.speechSynthesis.speak(u);
-    }
 
-    checkWinners(ball);
-    if (!isRoundFinished) drawInterval = setTimeout(spinCageAndDraw, 4000);
+    checkWinners();
+    if (!isRoundFinished) setTimeout(drawBall, 4000);
 }
 
-function checkWinners(ball) {
+function checkWinners() {
     participants.forEach(p => {
-        let hits = p.carton.filter(n => drawnBalls.includes(n)).length;
-        if (hits === p.carton.length && !isRoundFinished) {
+        const hits = p.carton.filter(n => drawnBalls.includes(n)).length;
+        if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
-            clearTimeout(drawInterval);
-            announceWinner(p);
+            alert("¡BINGO! Ganó " + p.name);
+            const wName = document.getElementById('winnerName');
+            const wOverlay = document.getElementById('winnerOverlay');
+            if (wName) wName.textContent = p.name;
+            if (wOverlay) wOverlay.classList.add('active');
         }
     });
-}
-
-function announceWinner(winner) {
-    const wonJackpot = raffleWinnerIds.includes(winner.user_id);
-    const prize = wonJackpot ? (4000 * participants.length * 0.7 + jackpot) : (4000 * participants.length * 0.7);
-    winnerNameEl.textContent = winner.name;
-    winnerPrizeEl.textContent = `Premio: $${prize.toLocaleString()}`;
-    winnerOverlay.classList.add('active');
-    if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Bingo! Ganó ${winner.name}`));
 }
 
 function updateUI() {
@@ -374,26 +185,22 @@ function updateUI() {
     roundDisplay.textContent = '#' + roundNumber;
 }
 
-function removePlayer(id) {
-    if (window.db_firebase) window.db_firebase.collection("jugadores").doc(id).delete();
-}
+function removePlayer(id) { window.db_firebase.collection("jugadores").doc(id).delete(); }
 window.removePlayer = removePlayer;
 
 function init() {
-    startBtn.addEventListener('click', startNewRound);
-    clearPlayersBtn.addEventListener('click', clearAllPlayers);
-    nextRoundBtn.addEventListener('click', () => {
-        winnerOverlay.classList.remove('active');
-        document.querySelector('main').classList.remove('playing-mode');
+    startBtn?.addEventListener('click', startNewRound);
+    clearPlayersBtn?.addEventListener('click', clearAllPlayers);
+    document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
+    document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
+        document.getElementById('winnerOverlay').classList.remove('active');
+        startBtn.disabled = false;
     });
-    addPlayerBtn.addEventListener('click', addPlayer);
+    
     setupFirebaseSync();
     
     const mb = document.getElementById('masterBoard');
     if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
-    
-    updateUI();
-    renderPlayers();
 }
 
 window.addEventListener('DOMContentLoaded', init);
