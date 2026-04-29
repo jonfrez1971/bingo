@@ -266,29 +266,39 @@ function addPlayer() {
     }
     
     const BOLD_LINK = "https://checkout.bold.co/payment/LNK_TYRW5PQ2S8";
-    const confirmPayment = confirm(`¿Deseas inscribirte como ${name}? Te redirigiremos a Bold para el pago.`);
     
-    if (confirmPayment) {
-        if (window.db_firebase) {
-            // Guardar en Firebase para que el ADMIN lo vea
-            window.db_firebase.collection("jugadores").add({
-                name: name,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                pago: 'pendiente'
-            }).then(() => {
-                playerNameInput.value = '';
-                window.open(BOLD_LINK, '_blank');
-                alert("¡Listo! Tu nombre aparecerá en el tablero del sorteo en unos segundos.");
-            });
-        } else {
-            // Fallback local if firebase not ready
-            const id = Date.now();
-            players.push({ id, name });
-            localStorage.setItem('bingo_players_list', JSON.stringify(players));
-            playerNameInput.value = '';
-            renderPlayers();
-        }
+    // Hablar ANTES de redirigir para asegurar que se escuche
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Detener cualquier voz previa
+        const msg = new SpeechSynthesisUtterance(`Bienvenido al juego, ${name}. Por favor completa tu pago de 4 mil pesos en la nueva pestaña que se va a abrir.`);
+        msg.lang = 'es-ES';
+        msg.rate = 0.9;
+        window.speechSynthesis.speak(msg);
     }
+
+    setTimeout(() => {
+        const confirmPayment = confirm(`¿Deseas inscribirte como ${name}? Se abrirá Bold para el pago.`);
+        
+        if (confirmPayment) {
+            if (window.db_firebase) {
+                window.db_firebase.collection("jugadores").add({
+                    name: name,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'pendiente_pago'
+                }).then(() => {
+                    playerNameInput.value = '';
+                    window.open(BOLD_LINK, '_blank');
+                });
+            } else {
+                const id = Date.now();
+                players.push({ id, name, status: 'pendiente_pago' });
+                localStorage.setItem('bingo_players_list', JSON.stringify(players));
+                playerNameInput.value = '';
+                renderPlayers();
+                window.open(BOLD_LINK, '_blank');
+            }
+        }
+    }, 500); // Pequeña espera para que la voz empiece
 }
 
 function openBoldCheckout() {
@@ -311,14 +321,17 @@ function renderPlayers() {
     players.forEach((p, index) => {
         const card = document.createElement('div');
         card.className = 'player-card';
-        card.id = `player-card-${p.id}`;
+        card.id = `player-card-${p.id || p.cardId}`;
+        
+        const isPending = p.status === 'pendiente_pago';
         
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name">${p.name}</span>
-                <button class="delete-btn" onclick="removePlayer(${p.id})">🗑️</button>
+                <span class="player-card-name">${isPending ? '⏳ ' : ''}${p.name}</span>
+                ${isPending ? '<span style="font-size:0.6rem; color:var(--accent); font-weight:bold;">PAGO PENDIENTE</span>' : ''}
+                <button class="delete-btn" onclick="removePlayer('${p.id}')">🗑️</button>
             </div>
-            <div class="card-numbers" id="numbers-${p.id}">
+            <div class="card-numbers" id="numbers-${p.id || p.cardId}">
                 <div class="number-capsule">-</div>
                 <div class="number-capsule">-</div>
                 <div class="number-capsule">-</div>
