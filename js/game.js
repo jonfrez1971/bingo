@@ -122,14 +122,16 @@ const isPlayerMode = urlParams.get('mode') === 'player';
 // Firebase Sync Logic
 let lastPlayersCount = 0;
 function setupFirebaseSync() {
-    if (!window.db_firebase) return;
+    if (!window.db_firebase) {
+        console.warn("Firebase no detectado. Modo local activado.");
+        return;
+    }
 
     // Listen for players in real-time
-    window.db_firebase.collection("jugadores").orderBy("timestamp", "desc")
+    window.db_firebase.collection("jugadores").orderBy("timestamp", "asc")
         .onSnapshot((snapshot) => {
             const newPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // Si hay más jugadores que antes, sonar la caja registradora
             if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) {
                 playCashSound();
             }
@@ -138,6 +140,8 @@ function setupFirebaseSync() {
             lastPlayersCount = players.length;
             renderPlayers();
             updateUI();
+        }, (error) => {
+            console.error("Error en sincronización Firebase:", error);
         });
 }
 
@@ -302,25 +306,29 @@ function init() {
 function addPlayer() {
     const name = playerNameInput.value.trim();
     if (!name) {
-        alert("Por favor, ingresa tu nombre para poder pagar y entrar.");
+        alert("Por favor, ingresa tu nombre.");
+        return;
+    }
+
+    // Verificar si el nombre ya existe
+    const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+        alert(`Ya hay un jugador llamado "${name}". Por favor agrega un apellido o número (ej: ${name} Pérez o ${name} 2) para poder identificarte.`);
         return;
     }
     
     const BOLD_LINK = "https://checkout.bold.co/payment/LNK_TYRW5PQ2S8";
     
-    // Hablar inmediatamente
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(`Bienvenido, ${name}. Procede al pago en la nueva pestaña.`);
+        const msg = new SpeechSynthesisUtterance(`Bienvenido, ${name}. Completa tu pago para entrar al sorteo.`);
         msg.lang = 'es-ES';
         window.speechSynthesis.speak(msg);
     }
 
-    // Abrir Bold INMEDIATAMENTE para evitar el bloqueador de popups
     const confirmPayment = confirm(`¿Inscribir a ${name} y abrir pasarela de pago?`);
     
     if (confirmPayment) {
-        // Abrir pestaña de Bold primero
         window.open(BOLD_LINK, '_blank');
 
         if (window.db_firebase) {
@@ -328,9 +336,8 @@ function addPlayer() {
                 name: name,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 status: 'pendiente_pago'
-            }).then(() => {
-                playerNameInput.value = '';
             });
+            playerNameInput.value = '';
         } else {
             const id = Date.now();
             players.push({ id, name, status: 'pendiente_pago' });
@@ -367,9 +374,9 @@ function renderPlayers() {
         
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name">${isPending ? '⏳ ' : ''}${p.name}</span>
-                ${isPending ? '<span style="font-size:0.6rem; color:var(--accent); font-weight:bold;">PAGO PENDIENTE</span>' : ''}
-                <button class="delete-btn" onclick="removePlayer('${p.id}')">🗑️</button>
+                <span class="player-card-name" style="white-space: normal; overflow: visible;">${isPending ? '⏳ ' : ''}${p.name}</span>
+                ${isPending ? '<span style="font-size:0.5rem; color:var(--accent); font-weight:bold; display:block;">PAGO PENDIENTE</span>' : ''}
+                <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left: auto;">🗑️</button>
             </div>
             <div class="card-numbers" id="numbers-${p.id || p.cardId}">
                 <div class="number-capsule">-</div>
