@@ -34,6 +34,7 @@ let isRoundFinished = false;
 let participants = [];
 let winnerInfo = null;
 let raffleWinnerIds = [];
+let lastBallSpoken = 0;
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -45,19 +46,14 @@ function getAudioCtx() {
     return audioCtx;
 }
 
-function playMixingSound(durationMs) {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    const startTime = ctx.currentTime;
-    const duration = durationMs / 1000;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(120, startTime);
-    g.gain.setValueAtTime(0.02, startTime);
-    g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start(startTime); osc.stop(startTime + duration);
+function speakText(text) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'es-ES';
+        u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+    }
 }
 
 // Firebase Sync
@@ -72,12 +68,22 @@ function setupFirebaseSync() {
     window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
         if (doc.exists) {
             const d = doc.data();
-            drawnBalls = d.bolas || [];
+            const newBalls = d.bolas || [];
             jackpot = d.jackpot || 10000;
             roundNumber = d.ronda || 1;
             winnerInfo = d.ganador || null;
             raffleWinnerIds = d.raffleWinnerIds || [];
 
+            // Cantar la bola nueva si somos jugadores
+            if (newBalls.length > drawnBalls.length) {
+                const latestBall = newBalls[newBalls.length - 1];
+                if (latestBall !== lastBallSpoken) {
+                    speakText(latestBall.toString());
+                    lastBallSpoken = latestBall;
+                }
+            }
+
+            drawnBalls = newBalls;
             updateUI();
             updateMasterBoardUI();
             renderPlayers();
@@ -119,12 +125,7 @@ function renderPlayers() {
     const title = document.getElementById('playersCountTitle');
     if (title) title.textContent = `Jugadores (${players.length})`;
 
-    // Ordenar: Mi cartón primero
-    const sorted = [...players].sort((a,b) => {
-        if (a.name === myName) return -1;
-        if (b.name === myName) return 1;
-        return 0;
-    });
+    const sorted = [...players].sort((a,b) => (a.name === myName ? -1 : b.name === myName ? 1 : 0));
 
     sorted.forEach((p) => {
         const card = document.createElement('div');
@@ -160,17 +161,11 @@ function addPlayer() {
     getAudioCtx();
     const name = playerNameInput.value.trim();
     if (!name) return alert("Escribe tu nombre.");
-    if (players.length >= 30) return alert("Cupo lleno (30 máx).");
-    const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
-    if (exists) return alert("Ese nombre ya existe.");
+    if (players.length >= 30) return alert("Cupo lleno.");
+    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Nombre existe.");
 
     localStorage.setItem('bingo_my_name', name);
-    
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(`Bienvenido ${name}. Completa tu pago.`);
-        msg.lang = 'es-ES'; window.speechSynthesis.speak(msg);
-    }
+    speakText(`Bienvenido ${name}. Completa tu pago.`);
 
     if (confirm(`¿Inscribir a ${name}?`)) {
         window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
@@ -206,9 +201,7 @@ function startNewRound() {
     raffleWinnerIds = selected.map(p => p.name);
     syncGameState();
 
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance("Sorteando acumulado. Atentos."));
-    }
+    speakText("Sorteando acumulado. Atentos todos.");
 
     const rOverlay = document.getElementById('raffleOverlay');
     if (rOverlay) rOverlay.classList.add('active');
@@ -221,7 +214,6 @@ function startNewRound() {
 function spinCageAndDraw() {
     if (isRoundFinished || drawnBalls.length >= 90) return;
     if (bingoCage) bingoCage.classList.add('spinning');
-    playMixingSound(2000);
     setTimeout(() => {
         if (bingoCage) bingoCage.classList.remove('spinning');
         drawBall();
@@ -235,10 +227,7 @@ function drawBall() {
     drawnBalls.push(ball);
     syncGameState();
     
-    if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(ball.toString());
-        u.lang = 'es-ES'; window.speechSynthesis.speak(u);
-    }
+    speakText(ball.toString());
     checkWinners();
     if (!isRoundFinished) setTimeout(spinCageAndDraw, 4500);
 }
@@ -251,7 +240,7 @@ function checkWinners() {
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
             const wonJackpot = raffleWinnerIds.includes(p.name);
-            winnerInfo = { name: p.name, prize: wonJackpot ? (base + jackpot) : base, isJackpot: wonJackpot };
+            winnerInfo = { name: p.name, prize: wonJackpot ? (base + jackpot) : base };
             syncGameState();
             showWinnerOverlay(winnerInfo);
         }
@@ -266,11 +255,7 @@ function showWinnerOverlay(info) {
     if (wName) wName.textContent = info.name;
     if (wPrize) wPrize.textContent = `Premio: $${info.prize.toLocaleString()}`;
     if (wOverlay) wOverlay.classList.add('active');
-    
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Bingo! Ganador ${info.name}`));
-    }
+    speakText(`¡Bingo! Ganador ${info.name}.`);
 }
 
 function updateUI() {
@@ -282,14 +267,7 @@ function updateUI() {
     }
 }
 
-function removePlayer(id) {
-    if (isPlayerMode) return;
-    if (confirm("¿Eliminar?")) window.db_firebase.collection("jugadores").doc(id).delete();
-}
-window.removePlayer = removePlayer;
-
 function init() {
-    // Seguridad: Ocultar botones de Admin si es modo jugador
     if (isPlayerMode) {
         const sBtn = document.getElementById('startBtn');
         const cBtn = document.getElementById('clearPlayersBtn');
@@ -298,38 +276,22 @@ function init() {
     }
 
     startBtn?.addEventListener('click', () => { getAudioCtx(); startNewRound(); });
-    
-    document.getElementById('clearPlayersBtn')?.addEventListener('click', async () => {
-        if (isPlayerMode) return;
-        if (!confirm("¿Limpiar todo?")) return;
-        const snap = await window.db_firebase.collection("jugadores").get();
-        const batch = window.db_firebase.batch();
-        snap.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        window.db_firebase.collection("juego").doc("estado").set({ ganador: null, bolas: [], ronda: 1, jackpot: 10000 });
-    });
-
-    document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
+    document.getElementById('addPlayerBtn')?.addEventListener('click', () => { getAudioCtx(); addPlayer(); });
     
     document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
         const overlay = document.getElementById('winnerOverlay');
         if (overlay) overlay.classList.remove('active');
         isRoundFinished = false;
         if (!isPlayerMode) {
-            winnerInfo = null;
-            drawnBalls = [];
+            winnerInfo = null; drawnBalls = [];
             syncGameState();
             startBtn.disabled = false;
         }
     });
 
     setupFirebaseSync();
-    
     const mb = document.getElementById('masterBoard');
-    if (mb) {
-        mb.innerHTML = '';
-        for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`;
-    }
+    if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
 }
 
 window.addEventListener('DOMContentLoaded', init);
