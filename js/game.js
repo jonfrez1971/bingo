@@ -9,14 +9,14 @@ function initDB() {
 }
 
 function getTable(tableName) {
-    const db = JSON.parse(localStorage.getItem(DB_KEY));
-    return db[tableName] || [];
+    const dbData = JSON.parse(localStorage.getItem(DB_KEY));
+    return dbData[tableName] || [];
 }
 
 function saveTable(tableName, data) {
-    const db = JSON.parse(localStorage.getItem(DB_KEY));
-    db[tableName] = data;
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    const dbData = JSON.parse(localStorage.getItem(DB_KEY));
+    dbData[tableName] = data;
+    localStorage.setItem(DB_KEY, JSON.stringify(dbData));
 }
 
 function generateId(tableName, idField) {
@@ -57,7 +57,6 @@ const db = {
     },
     addParticipante(ronda_id, user_id, carton) {
         const table = getTable('participantes');
-        if (table.filter(p => p.ronda_id === ronda_id).length >= 30) throw new Error('Límite de 30 jugadores alcanzado.');
         const newPart = { participante_id: generateId('participantes', 'participante_id'), ronda_id, user_id, carton };
         table.push(newPart);
         saveTable('participantes', table);
@@ -85,8 +84,9 @@ const db = {
 
 initDB();
 
-// GAME LOGIC
+// DOM ELEMENTS
 const startBtn = document.getElementById('startBtn');
+const clearPlayersBtn = document.getElementById('clearPlayersBtn');
 const raffleOverlay = document.getElementById('raffleOverlay');
 const raffleSpinnerText = document.getElementById('raffleSpinnerText');
 const jackpotDisplay = document.getElementById('jackpotDisplay');
@@ -107,69 +107,71 @@ const playerNameInput = document.getElementById('playerNameInput');
 const addPlayerBtn = document.getElementById('addPlayerBtn');
 const playersGrid = document.getElementById('playersGrid');
 
+// GLOBALS
 let currentRound = null;
 let participants = [];
 let drawnBalls = [];
 let drawInterval = null;
 let jackpot = 10000;
-let basePrize = 500;
+let basePrize = 4000;
 let raffleWinnerIds = [];
 let isRoundFinished = false;
-let players = []; // Now synced with Firebase
+let players = []; 
+let roundNumber = 1;
+
 const urlParams = new URLSearchParams(window.location.search);
 const isPlayerMode = urlParams.get('mode') === 'player';
 
-// Firebase Sync Logic
+// Firebase Sync
 let lastPlayersCount = 0;
 function setupFirebaseSync() {
-    if (!window.db_firebase) {
-        console.warn("Firebase no detectado. Modo local activado.");
-        return;
-    }
+    if (!window.db_firebase) return;
 
-    // Listen for players in real-time
     window.db_firebase.collection("jugadores").orderBy("timestamp", "asc")
         .onSnapshot((snapshot) => {
             const newPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) {
-                playCashSound();
-            }
-            
+            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) playCashSound();
             players = newPlayers;
             lastPlayersCount = players.length;
             renderPlayers();
             updateUI();
-        }, (error) => {
-            console.error("Error en sincronización Firebase:", error);
         });
 
-    // Listen for the game state (drawn balls)
     window.db_firebase.collection("juego").doc("estado")
         .onSnapshot((doc) => {
             if (doc.exists) {
                 const data = doc.data();
-                calledNumbers = data.bolas || [];
+                drawnBalls = data.bolas || [];
                 jackpot = data.jackpot || 10000;
                 roundNumber = data.ronda || 1;
-                
                 updateUI();
-                renderPlayers(); // This will mark the numbers in real-time
+                renderPlayers();
             }
         });
 }
 
 function syncGameState() {
     if (!window.db_firebase || isPlayerMode) return;
-    
     window.db_firebase.collection("juego").doc("estado").set({
-        bolas: calledNumbers,
+        bolas: drawnBalls,
         jackpot: jackpot,
         ronda: roundNumber,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(err => console.error("Error sync bolas:", err));
+    });
 }
 
+async function clearAllPlayers() {
+    if (!confirm("¿Seguro que quieres borrar a todos los jugadores? Esto reseteará la mesa.")) return;
+    if (window.db_firebase) {
+        const batch = window.db_firebase.batch();
+        const snapshot = await window.db_firebase.collection("jugadores").get();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        alert("Mesa limpia. Todos los jugadores eliminados.");
+    }
+}
+
+// Audio logic
 let audioCtx;
 function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -181,418 +183,131 @@ function playMixingSound(durationMs) {
     const ctx = getAudioCtx();
     const startTime = ctx.currentTime;
     const duration = durationMs / 1000;
-
-    // Simulate ball mixing with filtered noise and short pulses
     const bufferSize = ctx.sampleRate * duration;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    
-    for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-    }
-
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;
-
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(1200, startTime);
-    filter.frequency.exponentialRampToValueAtTime(800, startTime + duration);
-    filter.Q.value = 5;
-
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, startTime);
     gain.gain.linearRampToValueAtTime(0.15, startTime + 0.1);
     gain.gain.linearRampToValueAtTime(0, startTime + duration);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-
-    noise.start(startTime);
-    noise.stop(startTime + duration);
-
-    // Add some random "clacks"
-    for (let t = 0; t < duration; t += 0.1 + Math.random() * 0.2) {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(200 + Math.random() * 800, startTime + t);
-        g.gain.setValueAtTime(0.05, startTime + t);
-        g.gain.exponentialRampToValueAtTime(0.01, startTime + t + 0.03);
-        osc.connect(g);
-        g.connect(ctx.destination);
-        osc.start(startTime + t);
-        osc.stop(startTime + t + 0.03);
-    }
+    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    noise.start(startTime); noise.stop(startTime + duration);
 }
 
 function playCashSound() {
     const ctx = getAudioCtx();
     const now = ctx.currentTime;
-    
-    // Bell "Ding"
     const osc1 = ctx.createOscillator();
     const g1 = ctx.createGain();
     osc1.type = 'triangle';
     osc1.frequency.setValueAtTime(1500, now);
-    osc1.frequency.exponentialRampToValueAtTime(1000, now + 0.3);
     g1.gain.setValueAtTime(0.1, now);
     g1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    osc1.connect(g1);
-    g1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.3);
-
-    // Secondary ring
-    setTimeout(() => {
-        const osc2 = ctx.createOscillator();
-        const g2 = ctx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(2000, ctx.currentTime);
-        g2.gain.setValueAtTime(0.05, ctx.currentTime);
-        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-        osc2.connect(g2);
-        g2.connect(ctx.destination);
-        osc2.start(ctx.currentTime);
-        osc2.stop(ctx.currentTime + 0.1);
-    }, 100);
-}
-
-function playIntroSequence() {
-    if (introBtn) introBtn.disabled = true;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    if (announcerSubtitle) announcerSubtitle.textContent = `"¡Bienvenidos a Bingo Spress Líneas! Inscribe a los jugadores y prepárate para ganar."`;
-    if ('speechSynthesis' in window) {
-        let u = new SpeechSynthesisUtterance("¡Hola! Atentos todos. Inscribe a los jugadores, elige el modo y dale a Iniciar Ronda.");
-        u.lang = 'es-ES';
-        window.speechSynthesis.speak(u);
-    }
-    setTimeout(() => { if (introBtn) introBtn.disabled = false; }, 4000);
-}
-
-function init() {
-    startBtn.addEventListener('click', startNewRound);
-    
-    // Hide Admin buttons if in Player Mode
-    if (isPlayerMode) {
-        startBtn.style.display = 'none';
-        document.querySelector('.caller-section').style.display = 'none';
-        document.querySelector('main').style.gridTemplateColumns = '1fr';
-        document.querySelector('.logo h1').textContent = "Inscripción Bingo Spress";
-    }
-
-    if (introBtn) introBtn.addEventListener('click', playIntroSequence);
-    
-    setupFirebaseSync();
-    nextRoundBtn.addEventListener('click', () => {
-        winnerOverlay.classList.remove('active');
-        document.querySelector('main').classList.remove('playing-mode');
-        // Reset progress on all cards
-        renderPlayers();
-    });
-
-    addPlayerBtn.addEventListener('click', addPlayer);
-    playerNameInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addPlayer();
-    });
-
-    updateWinnersHistory();
-    // Default jackpot handling...
-    updateUI();
-
-    renderPlayers();
-
-    const masterBoardEl = document.getElementById('masterBoard');
-    if (masterBoardEl) {
-        masterBoardEl.innerHTML = '';
-        for (let i = 1; i <= 90; i++) {
-            masterBoardEl.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`;
-        }
-    }
-
-    const bingoCage = document.getElementById('bingoCage');
-    if (bingoCage) {
-        bingoCage.innerHTML = '';
-        for (let i = 0; i < 40; i++) {
-            const b = document.createElement('div');
-            b.className = 'cage-ball';
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * 65; 
-            b.style.left = `calc(50% + ${Math.cos(angle) * radius}px)`;
-            b.style.top = `calc(50% + ${Math.sin(angle) * radius}px)`;
-            if (Math.random() > 0.5) b.style.background = 'var(--accent)';
-            if (Math.random() > 0.8) b.style.background = '#fff';
-            bingoCage.appendChild(b);
-        }
-    }
-}
-
-function addPlayer() {
-    const name = playerNameInput.value.trim();
-    if (!name) {
-        alert("Por favor, ingresa tu nombre.");
-        return;
-    }
-
-    // Recordar nombre en este dispositivo
-    localStorage.setItem('bingo_my_name', name);
-    
-    // Verificar si el nombre ya existe
-    const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
-    if (exists) {
-        alert(`Ya hay un jugador llamado "${name}". Por favor agrega un apellido o número (ej: ${name} Pérez o ${name} 2) para poder identificarte.`);
-        return;
-    }
-    
-    const BOLD_LINK = "https://checkout.bold.co/payment/LNK_TYRW5PQ2S8";
-    
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(`Bienvenido, ${name}. Completa tu pago para entrar al sorteo.`);
-        msg.lang = 'es-ES';
-        window.speechSynthesis.speak(msg);
-    }
-
-    const confirmPayment = confirm(`¿Inscribir a ${name} y abrir pasarela de pago?`);
-    
-    if (confirmPayment) {
-        window.open(BOLD_LINK, '_blank');
-
-        if (window.db_firebase) {
-            window.db_firebase.collection("jugadores").add({
-                name: name,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                status: 'pendiente_pago'
-            });
-            playerNameInput.value = '';
-        } else {
-            const id = Date.now();
-            players.push({ id, name, status: 'pendiente_pago' });
-            localStorage.setItem('bingo_players_list', JSON.stringify(players));
-            playerNameInput.value = '';
-            renderPlayers();
-        }
-    }
-}
-
-function openBoldCheckout() {
-    const BOLD_LINK = "https://checkout.bold.co/payment/LNK_TYRW5PQ2S8"; 
-    alert("Redirigiendo a tu pasarela segura de Bold...");
-    window.open(BOLD_LINK, '_blank');
-}
-window.openBoldCheckout = openBoldCheckout;
-
-function removePlayer(id) {
-    players = players.filter(p => p.id !== id);
-    localStorage.setItem('bingo_players_list', JSON.stringify(players));
-    renderPlayers();
+    osc1.connect(g1); g1.connect(ctx.destination);
+    osc1.start(now); osc1.stop(now + 0.3);
 }
 
 function renderPlayers() {
     playersGrid.innerHTML = '';
     const myName = localStorage.getItem('bingo_my_name');
-    
-    const sortedPlayers = [...players].sort((a, b) => {
-        if (a.name === myName) return -1;
-        if (b.name === myName) return 1;
-        return 0;
-    });
+    const sorted = [...players].sort((a,b) => (a.name === myName ? -1 : b.name === myName ? 1 : 0));
 
-    sortedPlayers.forEach((p) => {
+    sorted.forEach((p) => {
         const card = document.createElement('div');
-        card.className = 'player-card';
-        if (p.name === myName) card.classList.add('my-card');
+        card.className = 'player-card' + (p.name === myName ? ' my-card' : '');
         card.id = `player-card-${p.id}`;
         
-        const isPending = p.status === 'pendiente_pago';
-        const carton = p.carton || []; // Obtener cartón de Firebase
-        
-        // Calcular aciertos basados en las bolas cantadas (llamadas desde Firebase)
+        const carton = p.carton || [];
         let hits = 0;
-        let numbersHtml = '';
-        
-        if (carton.length > 0) {
-            numbersHtml = carton.map((n) => {
-                const isMarked = calledNumbers.includes(n);
-                if (isMarked) hits++;
-                return `<div class="number-capsule ${isMarked ? 'marked' : ''}">${n}</div>`;
-            }).join('');
-        } else {
-            numbersHtml = '<div class="number-capsule">-</div>'.repeat(5);
-        }
-
-        const progressPercent = (hits / 5) * 100;
+        let numbersHtml = carton.length ? carton.map(n => {
+            const isMarked = drawnBalls.includes(n);
+            if (isMarked) hits++;
+            return `<div class="number-capsule ${isMarked ? 'marked' : ''}">${n}</div>`;
+        }).join('') : '<div class="number-capsule">-</div>'.repeat(5);
 
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name" style="white-space: normal; overflow: visible;">
-                    ${p.name === myName ? '⭐ ' : ''}${isPending ? '⏳ ' : ''}${p.name}
-                </span>
-                ${p.name === myName ? '<span style="font-size:0.5rem; color:#00f0ff; font-weight:bold;">MI CARTÓN</span>' : ''}
-                ${isPending ? '<span style="font-size:0.5rem; color:var(--accent); font-weight:bold; display:block;">PAGO PENDIENTE</span>' : ''}
-                <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left: auto;">🗑️</button>
+                <span class="player-card-name">${p.name === myName ? '⭐ ' : ''}${p.status==='pendiente_pago' ? '⏳ ' : ''}${p.name}</span>
+                ${p.name === myName ? '<span style="font-size:0.5rem; color:#00f0ff;">MI CARTÓN</span>' : ''}
+                <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left:auto">🗑️</button>
             </div>
-            <div class="card-numbers">
-                ${numbersHtml}
-            </div>
-            <div class="progress-info">
-                <span>Progreso</span>
-                <span>${hits}/5</span>
-            </div>
-            <div class="progress-container">
-                <div class="progress-bar" style="width: ${progressPercent}%"></div>
-            </div>
+            <div class="card-numbers">${numbersHtml}</div>
+            <div class="progress-info"><span>Progreso</span><span>${hits}/5</span></div>
+            <div class="progress-container"><div class="progress-bar" style="width:${(hits/5)*100}%"></div></div>
         `;
         playersGrid.appendChild(card);
     });
-}
-window.removePlayer = removePlayer; // Make it global for onclick
-
-function updateUI() {
-    jackpotDisplay.textContent = '$' + jackpot.toLocaleString();
-    roundDisplay.textContent = currentRound ? '#' + currentRound.ronda_id : '#--';
-}
-
-function speakNumber(num) {
-    if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(num.toString());
-        utterance.lang = 'es-ES';
-        utterance.rate = 1.0;
-        window.speechSynthesis.speak(utterance);
-    }
-}
-
-function getRandomSubset(min, max, count) {
-    let arr = [];
-    while(arr.length < count) {
-        let r = Math.floor(Math.random() * (max - min + 1)) + min;
-        if(arr.indexOf(r) === -1) arr.push(r);
-    }
-    return arr.sort((a,b)=>a-b);
-}
-
-function generateRandomCard(count) {
-    return getRandomSubset(1, 90, count);
+    if (playersCountTitle) playersCountTitle.textContent = `Jugadores (${players.length})`;
 }
 
 function startNewRound() {
-    const numPerCard = 5;
-    
-    if (players.length === 0) {
-        alert("¡Agrega al menos 1 jugador para empezar!");
-        return;
-    }
-
+    if (players.length === 0) { alert("¡Agrega jugadores!"); return; }
     startBtn.disabled = true;
     document.querySelector('main').classList.add('playing-mode');
-    
     drawnBalls = [];
     isRoundFinished = false;
     currentBallEl.textContent = '--';
     
-    // Resetear tablero maestro
     for (let i = 1; i <= 90; i++) {
         const mc = document.getElementById(`master-cell-${i}`);
         if(mc) mc.classList.remove('called');
     }
 
-    // Lógica de Ronda y Acumulado
     currentRound = db.createRonda(jackpot);
+    roundNumber = currentRound.ronda_id;
     updateUI();
     syncGameState();
 
     participants = [];
-    players.forEach((playerObj) => {
-        const carton = generateRandomCard(numPerCard);
-        
+    players.forEach((pObj) => {
+        const carton = Array.from({length: 5}, () => Math.floor(Math.random() * 90) + 1).sort((a,b)=>a-b);
         if (window.db_firebase) {
-            window.db_firebase.collection("jugadores").doc(playerObj.id).update({
-                carton: carton,
-                status: 'jugando'
-            }).catch(err => console.error("Error sync carton:", err));
+            window.db_firebase.collection("jugadores").doc(pObj.id).update({ carton, status: 'jugando' });
         }
-
-        let user = db.getAllUsers().find(u => u.nombre === playerObj.name);
-        if (!user) user = db.createUser(playerObj.name);
-        
-        try {
-            const p = db.addParticipante(currentRound.ronda_id, user.user_id, carton);
-            participants.push({ ...p, name: user.nombre, cardId: playerObj.id, warningsGiven: [] });
-        } catch(e) { console.error(e); }
+        let user = db.getAllUsers().find(u => u.nombre === pObj.name) || db.createUser(pObj.name);
+        const p = db.addParticipante(currentRound.ronda_id, user.user_id, carton);
+        participants.push({ ...p, name: user.nombre, cardId: pObj.id, warningsGiven: [] });
     });
 
-    // Calcular premios
-    basePrize = (participants.length * 4000) * 0.7;
-
-    // Sorteo de acumulado (2 personas)
-    const shuffled = [...participants].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, Math.min(participants.length, 2));
+    const selected = [...participants].sort(() => 0.5 - Math.random()).slice(0, 2);
     raffleWinnerIds = selected.map(p => p.user_id);
-    
     selected.forEach(p => {
         db.createSorteo(currentRound.ronda_id, p.participante_id, p.user_id);
         const cardEl = document.getElementById(`player-card-${p.cardId}`);
-        if (cardEl) {
-            const nameEl = cardEl.querySelector('.player-card-name');
-            if (nameEl) nameEl.innerHTML = `🏆 ${p.name}`;
-            cardEl.style.borderColor = "var(--accent)";
-        }
+        if (cardEl) cardEl.style.borderColor = "var(--accent)";
     });
     
-    const winnerNames = selected.map(p => p.name).join(' y ');
-    raffleNameEl.textContent = winnerNames;
-    startPreShowRaffle(winnerNames);
+    raffleNameEl.textContent = selected.map(p => p.name).join(' y ');
+    startPreShowRaffle(raffleNameEl.textContent);
 }
 
 function startPreShowRaffle(winnerName) {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance("Sorteando el premio acumulado..."));
-    }
     raffleOverlay.classList.add('active');
-    
     let ticks = 0;
-    const maxTicks = 20;
-    const spinInterval = setInterval(() => {
-        const randomTempName = participants[Math.floor(Math.random() * participants.length)].name;
-        raffleSpinnerText.textContent = randomTempName;
-        ticks++;
-        if (ticks >= maxTicks) {
-            clearInterval(spinInterval);
+    const interval = setInterval(() => {
+        raffleSpinnerText.textContent = participants[Math.floor(Math.random() * participants.length)].name;
+        if (++ticks >= 20) {
+            clearInterval(interval);
             raffleSpinnerText.textContent = "¡" + winnerName + "!";
-            raffleSpinnerText.style.color = "var(--secondary)";
-            
-            // Announce names and jackpot
-            if ('speechSynthesis' in window) {
-                const jackpotText = jackpot.toLocaleString();
-                const speech = new SpeechSynthesisUtterance(`${winnerName} van por el acumulado. El acumulado en juego es de ${jackpotText} pesos.`);
-                speech.lang = 'es-ES';
-                window.speechSynthesis.speak(speech);
-            }
-
             setTimeout(() => {
                 raffleOverlay.classList.remove('active');
-                raffleSpinnerText.style.color = "white"; 
-                if (announcerSubtitle) announcerSubtitle.textContent = `"¡Comienza la partida! Mucha suerte a todos."`;
                 drawInterval = setTimeout(spinCageAndDraw, 2000);
-            }, 5000); // Increased timeout to let the locutor finish speaking
+            }, 4000);
         }
     }, 100);
 }
 
 function spinCageAndDraw() {
     if (drawnBalls.length >= 90 || isRoundFinished) return;
-    
-    currentBallEl.classList.remove('pulse');
-    currentBallEl.style.opacity = '0';
-
     const cage = document.getElementById('bingoCage');
-    if (cage) {
-        cage.classList.add('spinning');
-        playMixingSound(2000); // Trigger the mixing sound
-    }
-    
+    if (cage) cage.classList.add('spinning');
+    playMixingSound(2000);
     setTimeout(() => {
         if (cage) cage.classList.remove('spinning');
         drawBall(); 
@@ -604,57 +319,29 @@ function drawBall() {
         clearTimeout(drawInterval);
         return;
     }
-
-    let nextBall;
-    do { nextBall = Math.floor(Math.random() * 90) + 1; } while (drawnBalls.includes(nextBall));
-
-    drawnBalls.push(nextBall);
-    syncGameState(); // Enviar a Firebase para que los jugadores lo vean en vivo
-    
-    void currentBallEl.offsetWidth; 
-    currentBallEl.textContent = nextBall;
+    let ball;
+    do { ball = Math.floor(Math.random() * 90) + 1; } while (drawnBalls.includes(ball));
+    drawnBalls.push(ball);
+    syncGameState();
+    currentBallEl.textContent = ball;
     currentBallEl.classList.add('pulse');
+    setTimeout(() => currentBallEl.classList.remove('pulse'), 500);
     
-    speakNumber(nextBall);
+    const mc = document.getElementById(`master-cell-${ball}`);
+    if (mc) mc.classList.add('called');
     
-    const masterCell = document.getElementById(`master-cell-${nextBall}`);
-    if (masterCell) masterCell.classList.add('called');
-
-    checkWinners(nextBall);
-    
-    if (!isRoundFinished) {
-        drawInterval = setTimeout(spinCageAndDraw, 4000);
+    if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(ball.toString());
+        u.lang = 'es-ES'; window.speechSynthesis.speak(u);
     }
+
+    checkWinners(ball);
+    if (!isRoundFinished) drawInterval = setTimeout(spinCageAndDraw, 4000);
 }
 
 function checkWinners(ball) {
     participants.forEach(p => {
-        let idxOnCard = p.carton.indexOf(ball);
-        if (idxOnCard !== -1) {
-            const cell = document.getElementById(`cell-${p.participante_id}-${idxOnCard}`);
-            if (cell) cell.classList.add('marked');
-        }
-        
         let hits = p.carton.filter(n => drawnBalls.includes(n)).length;
-        
-        // Update Progress UI
-        const progressText = document.getElementById(`progress-text-${p.cardId}`);
-        const progressBar = document.getElementById(`progress-bar-${p.cardId}`);
-        if (progressText) progressText.textContent = `${hits}/5`;
-        if (progressBar) progressBar.style.width = `${(hits / 5) * 100}%`;
-
-        // Emotion Logic (Announce almost-winner)
-        if (hits === p.carton.length - 1 && !p.warningsGiven.includes('almost')) {
-            p.warningsGiven.push('almost');
-            const cardEl = document.getElementById(`player-card-${p.cardId}`);
-            if (cardEl) cardEl.classList.add('almost-winner');
-            
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Atención! A ${p.name} le falta solo un número.`));
-            }
-            if (announcerSubtitle) announcerSubtitle.textContent = `"¡Cuidado! ${p.name} está a punto de ganar."`;
-        }
-
         if (hits === p.carton.length && !isRoundFinished) {
             isRoundFinished = true;
             clearTimeout(drawInterval);
@@ -664,52 +351,39 @@ function checkWinners(ball) {
 }
 
 function announceWinner(winner) {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    
-    const cardEl = document.getElementById(`player-card-${winner.cardId}`);
-    if (cardEl) {
-        cardEl.classList.add('winner');
-        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    let wonJackpot = raffleWinnerIds.includes(winner.user_id);
-    let prize = wonJackpot ? (basePrize + currentRound.acumulado) : basePrize;
-    
-    db.addHistorialGanador(currentRound.ronda_id, winner.user_id, prize);
-    db.updateRonda(currentRound.ronda_id, { estado: 'finalizada', fecha_fin: new Date().toISOString(), ganador_id: winner.user_id });
-
+    const wonJackpot = raffleWinnerIds.includes(winner.user_id);
+    const prize = wonJackpot ? (4000 * participants.length * 0.7 + jackpot) : (4000 * participants.length * 0.7);
     winnerNameEl.textContent = winner.name;
-    winnerPrizeEl.textContent = `Premio: $${prize.toLocaleString()} ${wonJackpot ? '(¡Incluye Acumulado!)' : ''}`;
-    
-    if (wonJackpot) {
-        winnerOverlay.classList.add('jackpot-win');
-        winnerMainTitle.textContent = "¡GANÓ EL ACUMULADO!";
-    } else {
-        winnerOverlay.classList.remove('jackpot-win');
-        winnerMainTitle.textContent = "¡BINGO!";
-    }
-
+    winnerPrizeEl.textContent = `Premio: $${prize.toLocaleString()}`;
     winnerOverlay.classList.add('active');
-    
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Felicidades! ${winner.name} ha ganado la ronda.`));
-    }
-    
-    updateWinnersHistory();
+    if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Bingo! Ganó ${winner.name}`));
 }
 
-function updateWinnersHistory() {
-    const history = db.getHistorialGanadores().reverse().slice(0, 8);
-    winnersList.innerHTML = '';
-    history.forEach(h => {
-        const u = db.getAllUsers().find(user => user.user_id === h.user_id);
-        const div = document.createElement('div');
-        div.className = 'glass-panel';
-        div.style.padding = '8px';
-        div.style.fontSize = '0.9rem';
-        div.innerHTML = `<strong>Ronda #${h.ronda_id}</strong><br><span style="color:var(--secondary)">${u ? u.nombre : 'Desconocido'}</span> - <span style="color:var(--accent)">$${h.premio.toLocaleString()}</span>`;
-        winnersList.appendChild(div);
+function updateUI() {
+    jackpotDisplay.textContent = '$' + jackpot.toLocaleString();
+    roundDisplay.textContent = '#' + roundNumber;
+}
+
+function removePlayer(id) {
+    if (window.db_firebase) window.db_firebase.collection("jugadores").doc(id).delete();
+}
+window.removePlayer = removePlayer;
+
+function init() {
+    startBtn.addEventListener('click', startNewRound);
+    clearPlayersBtn.addEventListener('click', clearAllPlayers);
+    nextRoundBtn.addEventListener('click', () => {
+        winnerOverlay.classList.remove('active');
+        document.querySelector('main').classList.remove('playing-mode');
     });
+    addPlayerBtn.addEventListener('click', addPlayer);
+    setupFirebaseSync();
+    
+    const mb = document.getElementById('masterBoard');
+    if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
+    
+    updateUI();
+    renderPlayers();
 }
 
 window.addEventListener('DOMContentLoaded', init);
