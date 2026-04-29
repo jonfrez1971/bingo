@@ -120,13 +120,22 @@ const urlParams = new URLSearchParams(window.location.search);
 const isPlayerMode = urlParams.get('mode') === 'player';
 
 // Firebase Sync Logic
+let lastPlayersCount = 0;
 function setupFirebaseSync() {
     if (!window.db_firebase) return;
 
     // Listen for players in real-time
     window.db_firebase.collection("jugadores").orderBy("timestamp", "desc")
         .onSnapshot((snapshot) => {
-            players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const newPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Si hay más jugadores que antes, sonar la caja registradora
+            if (newPlayers.length > lastPlayersCount && lastPlayersCount !== 0) {
+                playCashSound();
+            }
+            
+            players = newPlayers;
+            lastPlayersCount = players.length;
             renderPlayers();
             updateUI();
         });
@@ -187,6 +196,38 @@ function playMixingSound(durationMs) {
         osc.start(startTime + t);
         osc.stop(startTime + t + 0.03);
     }
+}
+
+function playCashSound() {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    
+    // Bell "Ding"
+    const osc1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(1500, now);
+    osc1.frequency.exponentialRampToValueAtTime(1000, now + 0.3);
+    g1.gain.setValueAtTime(0.1, now);
+    g1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc1.connect(g1);
+    g1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.3);
+
+    // Secondary ring
+    setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(2000, ctx.currentTime);
+        g2.gain.setValueAtTime(0.05, ctx.currentTime);
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc2.connect(g2);
+        g2.connect(ctx.destination);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.1);
+    }, 100);
 }
 
 function playIntroSequence() {
