@@ -109,7 +109,7 @@ function setupFirebaseSync() {
                 showWinnerOverlay(winnerInfo);
             }
         }
-    }, err => console.error("Error Firebase Estado:", err));
+    });
 }
 
 function syncGameState(extra = {}) {
@@ -179,27 +179,20 @@ function addPlayer() {
     const name = playerNameInput.value.trim();
     if (!name) return alert("Escribe tu nombre.");
     if (players.length >= 30) return alert("Cupo lleno.");
-    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Ese nombre ya existe.");
 
     localStorage.setItem('bingo_my_name', name);
     speakText(`Bienvenido ${name}. Completa tu pago para entrar al sorteo.`);
 
-    if (confirm(`¿Inscribir a ${name} y proceder al pago?`)) {
-        // Primero guardamos en Firebase
-        window.db_firebase.collection("jugadores").add({
-            name: name,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            status: 'pendiente'
-        }).then(() => {
-            console.log("Jugador agregado con éxito");
-            // Luego abrimos el link de pago
-            window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
-            playerNameInput.value = '';
-        }).catch(err => {
-            console.error("Error al agregar jugador:", err);
-            alert("Error al conectar con la base de datos. Intenta de nuevo.");
-        });
-    }
+    // GUARDAR DIRECTO SIN CONFIRMACIÓN (PARA EVITAR BLOQUEOS)
+    window.db_firebase.collection("jugadores").add({
+        name: name,
+        time: Date.now(),
+        status: 'pendiente'
+    });
+
+    // Abrir pago
+    window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+    playerNameInput.value = '';
 }
 
 function startNewRound() {
