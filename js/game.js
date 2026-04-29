@@ -63,7 +63,7 @@ function setupFirebaseSync() {
     window.db_firebase.collection("jugadores").onSnapshot((snap) => {
         players = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderPlayers();
-    });
+    }, err => console.error("Error Firebase Jugadores:", err));
 
     window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
         if (doc.exists) {
@@ -109,7 +109,7 @@ function setupFirebaseSync() {
                 showWinnerOverlay(winnerInfo);
             }
         }
-    });
+    }, err => console.error("Error Firebase Estado:", err));
 }
 
 function syncGameState(extra = {}) {
@@ -179,19 +179,26 @@ function addPlayer() {
     const name = playerNameInput.value.trim();
     if (!name) return alert("Escribe tu nombre.");
     if (players.length >= 30) return alert("Cupo lleno.");
-    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Nombre existe.");
+    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Ese nombre ya existe.");
 
     localStorage.setItem('bingo_my_name', name);
-    speakText(`Bienvenido ${name}.`);
+    speakText(`Bienvenido ${name}. Completa tu pago para entrar al sorteo.`);
 
-    if (confirm(`¿Inscribir a ${name}?`)) {
-        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+    if (confirm(`¿Inscribir a ${name} y proceder al pago?`)) {
+        // Primero guardamos en Firebase
         window.db_firebase.collection("jugadores").add({
             name: name,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             status: 'pendiente'
+        }).then(() => {
+            console.log("Jugador agregado con éxito");
+            // Luego abrimos el link de pago
+            window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+            playerNameInput.value = '';
+        }).catch(err => {
+            console.error("Error al agregar jugador:", err);
+            alert("Error al conectar con la base de datos. Intenta de nuevo.");
         });
-        playerNameInput.value = '';
     }
 }
 
@@ -203,9 +210,7 @@ function startNewRound() {
     isRoundFinished = false;
     winnerInfo = null;
 
-    // AUMENTAR ACUMULADO: 1000 por cada jugador
     jackpot += players.length * 1000;
-
     currentRound = db.createRonda(jackpot);
     roundNumber = currentRound.ronda_id;
 
@@ -233,7 +238,6 @@ function startNewRound() {
 function spinCageAndDraw() {
     if (isRoundFinished || drawnBalls.length >= 90) return;
     syncGameState({ isSpinning: true });
-    
     setTimeout(() => {
         syncGameState({ isSpinning: false });
         drawBall();
@@ -246,7 +250,6 @@ function drawBall() {
     do { ball = Math.floor(Math.random()*90)+1; } while (drawnBalls.includes(ball));
     drawnBalls.push(ball);
     syncGameState();
-    
     checkWinners();
     if (!isRoundFinished) setTimeout(spinCageAndDraw, 4500);
 }
@@ -255,7 +258,7 @@ function checkWinners() {
     if (isPlayerMode) return;
     const base = (players.length * 4000) * 0.7;
     participants.forEach(p => {
-        const hits = p.carton.filter(n => drawnBalls.includes(n)).length;
+        const hits = (p.carton || []).filter(n => drawnBalls.includes(n)).length;
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
             const wonJackpot = raffleWinnerIds.includes(p.name);
@@ -290,6 +293,7 @@ function removePlayer(id) {
     if (isPlayerMode) return;
     if (confirm("¿Eliminar?")) window.db_firebase.collection("jugadores").doc(id).delete();
 }
+window.removePlayer = removePlayer;
 
 function init() {
     if (isPlayerMode) {
@@ -300,7 +304,7 @@ function init() {
     }
 
     startBtn?.addEventListener('click', () => { getAudioCtx(); startNewRound(); });
-    document.getElementById('addPlayerBtn')?.addEventListener('click', () => { getAudioCtx(); addPlayer(); });
+    document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
     
     document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
         const overlay = document.getElementById('winnerOverlay');
