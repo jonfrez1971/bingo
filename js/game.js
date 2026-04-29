@@ -35,6 +35,7 @@ let participants = [];
 let winnerInfo = null;
 let raffleWinnerIds = [];
 let lastBallSpoken = 0;
+let isRaffleActive = false;
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -50,8 +51,7 @@ function speakText(text) {
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'es-ES';
-        u.rate = 0.9;
+        u.lang = 'es-ES'; u.rate = 0.9;
         window.speechSynthesis.speak(u);
     }
 }
@@ -73,8 +73,28 @@ function setupFirebaseSync() {
             roundNumber = d.ronda || 1;
             winnerInfo = d.ganador || null;
             raffleWinnerIds = d.raffleWinnerIds || [];
+            const raffleActive = d.raffleActive || false;
+            const isSpinning = d.isSpinning || false;
 
-            // Cantar la bola nueva si somos jugadores
+            // Sincronizar Sorteo Acumulado
+            const rOverlay = document.getElementById('raffleOverlay');
+            const rName = document.getElementById('raffleName');
+            if (raffleActive && !isRaffleActive) {
+                if (rName) rName.textContent = raffleWinnerIds.join(' y ');
+                if (rOverlay) rOverlay.classList.add('active');
+                speakText("Sorteando acumulado. Atentos: " + raffleWinnerIds.join(' y '));
+            } else if (!raffleActive && isRaffleActive) {
+                if (rOverlay) rOverlay.classList.remove('active');
+            }
+            isRaffleActive = raffleActive;
+
+            // Sincronizar Balotera Girando
+            if (bingoCage) {
+                if (isSpinning) bingoCage.classList.add('spinning');
+                else bingoCage.classList.remove('spinning');
+            }
+
+            // Cantar la bola nueva
             if (newBalls.length > drawnBalls.length) {
                 const latestBall = newBalls[newBalls.length - 1];
                 if (latestBall !== lastBallSpoken) {
@@ -103,6 +123,7 @@ function syncGameState(extra = {}) {
         ronda: roundNumber,
         ganador: winnerInfo,
         raffleWinnerIds: raffleWinnerIds,
+        raffleActive: isRaffleActive,
         ...extra
     });
 }
@@ -121,7 +142,6 @@ function renderPlayers() {
     if (!playersGrid) return;
     playersGrid.innerHTML = '';
     const myName = localStorage.getItem('bingo_my_name');
-    
     const title = document.getElementById('playersCountTitle');
     if (title) title.textContent = `Jugadores (${players.length})`;
 
@@ -165,7 +185,7 @@ function addPlayer() {
     if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) return alert("Nombre existe.");
 
     localStorage.setItem('bingo_my_name', name);
-    speakText(`Bienvenido ${name}. Completa tu pago.`);
+    speakText(`Bienvenido ${name}.`);
 
     if (confirm(`¿Inscribir a ${name}?`)) {
         window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
@@ -199,23 +219,22 @@ function startNewRound() {
 
     const selected = [...participants].sort(()=>0.5-Math.random()).slice(0, 2);
     raffleWinnerIds = selected.map(p => p.name);
+    isRaffleActive = true;
     syncGameState();
 
-    speakText("Sorteando acumulado. Atentos todos.");
-
-    const rOverlay = document.getElementById('raffleOverlay');
-    if (rOverlay) rOverlay.classList.add('active');
     setTimeout(() => {
-        if (rOverlay) rOverlay.classList.remove('active');
+        isRaffleActive = false;
+        syncGameState();
         spinCageAndDraw();
-    }, 5000);
+    }, 6000);
 }
 
 function spinCageAndDraw() {
     if (isRoundFinished || drawnBalls.length >= 90) return;
-    if (bingoCage) bingoCage.classList.add('spinning');
+    syncGameState({ isSpinning: true });
+    
     setTimeout(() => {
-        if (bingoCage) bingoCage.classList.remove('spinning');
+        syncGameState({ isSpinning: false });
         drawBall();
     }, 2000);
 }
@@ -227,7 +246,6 @@ function drawBall() {
     drawnBalls.push(ball);
     syncGameState();
     
-    speakText(ball.toString());
     checkWinners();
     if (!isRoundFinished) setTimeout(spinCageAndDraw, 4500);
 }
@@ -265,6 +283,11 @@ function updateUI() {
         currentBallEl.textContent = drawnBalls[drawnBalls.length - 1];
         currentBallEl.style.opacity = 1;
     }
+}
+
+function removePlayer(id) {
+    if (isPlayerMode) return;
+    if (confirm("¿Eliminar?")) window.db_firebase.collection("jugadores").doc(id).delete();
 }
 
 function init() {
