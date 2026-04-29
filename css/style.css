@@ -257,8 +257,8 @@ main {
 /* Center - Players & Cards */
 .cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
     overflow-y: auto;
     max-height: 85vh;
     padding: 10px;
@@ -267,19 +267,28 @@ main {
 .player-card {
     background: var(--panel-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: 10px;
+    padding: 8px;
     position: relative;
     transition: all 0.3s;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    min-width: 140px;
 }
 
 .player-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     border-color: rgba(255,255,255,0.2);
+}
+
+.player-card.my-card {
+    border: 2px solid var(--secondary);
+    box-shadow: 0 0 20px var(--secondary-glow);
+    background: rgba(0, 240, 255, 0.1);
+    transform: scale(1.05);
+    z-index: 10;
 }
 
 .player-card.winner {
@@ -300,13 +309,13 @@ main {
 }
 
 .player-card-name {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     font-weight: 800;
     color: var(--text-main);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 80%;
+    max-width: 75%;
 }
 
 .delete-btn {
@@ -331,7 +340,7 @@ main {
 
 .number-capsule {
     flex: 1;
-    height: 32px;
+    height: 28px;
     background: rgba(138, 43, 226, 0.15);
     border: 1px solid rgba(138, 43, 226, 0.3);
     border-radius: 20px;
@@ -340,7 +349,7 @@ main {
     justify-content: center;
     font-weight: 800;
     color: var(--secondary);
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     transition: all 0.3s;
 }
 
