@@ -497,7 +497,7 @@ function startNewRound() {
         if(mc) mc.classList.remove('called');
     }
 
-    // Lógica de Ronda
+    // Lógica de Ronda y Acumulado
     currentRound = db.createRonda(jackpot);
     updateUI();
     syncGameState();
@@ -522,6 +522,10 @@ function startNewRound() {
         } catch(e) { console.error(e); }
     });
 
+    // Calcular premios
+    basePrize = (participants.length * 4000) * 0.7;
+
+    // Sorteo de acumulado (2 personas)
     const shuffled = [...participants].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, Math.min(participants.length, 2));
     raffleWinnerIds = selected.map(p => p.user_id);
