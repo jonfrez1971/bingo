@@ -33,6 +33,7 @@ let jackpot = 10000;
 let isRoundFinished = false;
 let participants = [];
 let winnerInfo = null;
+let raffleWinnerIds = [];
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -46,15 +47,14 @@ function getAudioCtx() {
 
 function playMixingSound(durationMs) {
     const ctx = getAudioCtx();
+    if (!ctx) return;
     const startTime = ctx.currentTime;
     const duration = durationMs / 1000;
-    
-    // Un simple sonido de mezcla procesal
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(150, startTime);
-    g.gain.setValueAtTime(0.05, startTime);
+    osc.frequency.setValueAtTime(120, startTime);
+    g.gain.setValueAtTime(0.03, startTime);
     g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.connect(g); g.connect(ctx.destination);
     osc.start(startTime); osc.stop(startTime + duration);
@@ -76,6 +76,7 @@ function setupFirebaseSync() {
             jackpot = d.jackpot || 10000;
             roundNumber = d.ronda || 1;
             winnerInfo = d.ganador || null;
+            raffleWinnerIds = d.raffleWinnerIds || [];
 
             updateUI();
             updateMasterBoardUI();
@@ -95,6 +96,8 @@ function syncGameState(extra = {}) {
         jackpot: jackpot,
         ronda: roundNumber,
         ganador: winnerInfo,
+        raffleWinnerIds: raffleWinnerIds,
+        numPlayers: players.length,
         ...extra
     });
 }
@@ -112,6 +115,11 @@ function updateMasterBoardUI() {
 function renderPlayers() {
     playersGrid.innerHTML = '';
     const myName = localStorage.getItem('bingo_my_name');
+    
+    // Titulo dinámico
+    const title = document.getElementById('playersCountTitle');
+    if (title) title.textContent = `Jugadores (${players.length})`;
+
     players.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'player-card' + (p.name === myName ? ' my-card' : '');
@@ -123,27 +131,60 @@ function renderPlayers() {
             return `<div class="number-capsule ${m ? 'marked' : ''}">${n}</div>`;
         }).join('') : '<div class="number-capsule">-</div>'.repeat(5);
 
+        const isWinnerInRaffle = raffleWinnerIds.includes(p.name);
+
         card.innerHTML = `
             <div class="card-top">
-                <span>${p.name === myName ? '⭐ ' : ''}${p.name}</span>
-                <button onclick="removePlayer('${p.id}')" style="margin-left:auto; background:none; border:none; color:white; cursor:pointer;">🗑️</button>
+                <span class="player-card-name">${isWinnerInRaffle ? '🏆 ' : ''}${p.name === myName ? '⭐ ' : ''}${p.status==='pendiente' ? '⏳ ' : ''}${p.name}</span>
+                <button onclick="removePlayer('${p.id}')" style="margin-left:auto; background:none; border:none; color:white; cursor:pointer; font-size:0.8rem;">🗑️</button>
             </div>
             <div class="card-numbers">${nums}</div>
-            <div style="font-size:0.7rem; margin-top:5px;">Progreso: ${hits}/5</div>
+            <div class="progress-info"><span>Progreso</span><span>${hits}/5</span></div>
+            <div class="progress-container"><div class="progress-bar" style="width:${(hits/5)*100}%"></div></div>
         `;
         playersGrid.appendChild(card);
     });
 }
 
+function addPlayer() {
+    getAudioCtx();
+    const name = playerNameInput.value.trim();
+    if (!name) return alert("Escribe tu nombre.");
+
+    if (players.length >= 30) return alert("Lo sentimos, ya hay 30 jugadores inscritos.");
+
+    // Prevenir duplicados
+    const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+    if (exists) return alert(`El nombre "${name}" ya está en uso. Agrega un apellido o número.`);
+
+    localStorage.setItem('bingo_my_name', name);
+    
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(`Bienvenido ${name}. Completa tu pago para entrar al sorteo.`);
+        msg.lang = 'es-ES';
+        window.speechSynthesis.speak(msg);
+    }
+
+    if (confirm(`¿Inscribir a ${name} y pagar?`)) {
+        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+        window.db_firebase.collection("jugadores").add({
+            name: name,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            status: 'pendiente'
+        });
+        playerNameInput.value = '';
+    }
+}
+
 function startNewRound() {
-    if (players.length === 0) return alert("No hay jugadores");
+    if (players.length === 0) return alert("No hay jugadores.");
     startBtn.disabled = true;
     drawnBalls = [];
     isRoundFinished = false;
     winnerInfo = null;
     currentRound = db.createRonda(jackpot);
     roundNumber = currentRound.ronda_id;
-    syncGameState();
 
     participants = [];
     players.forEach(pObj => {
@@ -154,30 +195,32 @@ function startNewRound() {
         participants.push({...p, name: user.nombre, cardId: pObj.id});
     });
 
-    // Sorteo Acumulado
-    const selected = [...participants].sort(()=>0.5-Math.random()).slice(0,2);
-    const names = selected.map(p=>p.name).join(' y ');
-    const raffleEl = document.getElementById('raffleName');
-    if (raffleEl) raffleEl.textContent = names;
+    const selected = [...participants].sort(()=>0.5-Math.random()).slice(0, 2);
+    raffleWinnerIds = selected.map(p => p.name);
+    const namesText = selected.map(p=>p.name).join(' y ');
     
+    syncGameState();
+
     if ('speechSynthesis' in window) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Sorteando acumulado. Atentos ${names}.`));
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Sorteando acumulado. Atentos ${namesText}, ustedes van por el premio mayor.`));
     }
 
     const rOverlay = document.getElementById('raffleOverlay');
+    const rName = document.getElementById('raffleName');
+    
+    if (rName) rName.textContent = namesText;
     if (rOverlay) rOverlay.classList.add('active');
     
     setTimeout(() => {
         if (rOverlay) rOverlay.classList.remove('active');
         spinCageAndDraw();
-    }, 4000);
+    }, 5000);
 }
 
 function spinCageAndDraw() {
     if (isRoundFinished || drawnBalls.length >= 90) return;
     if (bingoCage) bingoCage.classList.add('spinning');
     playMixingSound(2000);
-    
     setTimeout(() => {
         if (bingoCage) bingoCage.classList.remove('spinning');
         drawBall();
@@ -196,18 +239,20 @@ function drawBall() {
         u.lang = 'es-ES'; u.rate = 0.9;
         window.speechSynthesis.speak(u);
     }
-
     checkWinners();
-    if (!isRoundFinished) setTimeout(spinCageAndDraw, 4000);
+    if (!isRoundFinished) setTimeout(spinCageAndDraw, 4500);
 }
 
 function checkWinners() {
     if (isPlayerMode) return;
+    const base = (players.length * 4000) * 0.7;
     participants.forEach(p => {
         const hits = p.carton.filter(n => drawnBalls.includes(n)).length;
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
-            winnerInfo = { name: p.name };
+            const wonJackpot = raffleWinnerIds.includes(p.name);
+            const finalPrize = wonJackpot ? (base + jackpot) : base;
+            winnerInfo = { name: p.name, prize: finalPrize, isJackpot: wonJackpot };
             syncGameState();
             showWinnerOverlay(winnerInfo);
         }
@@ -218,12 +263,14 @@ function showWinnerOverlay(info) {
     isRoundFinished = true;
     const wOverlay = document.getElementById('winnerOverlay');
     const wName = document.getElementById('winnerName');
+    const wPrize = document.getElementById('winnerPrize');
     if (wName) wName.textContent = info.name;
+    if (wPrize) wPrize.textContent = `Premio: $${info.prize.toLocaleString()} ${info.isJackpot ? '(¡Incluye Acumulado!)' : ''}`;
     if (wOverlay) wOverlay.classList.add('active');
     
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Bingo! El ganador es ${info.name}`));
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(`¡Bingo! El ganador de la ronda es ${info.name}. Se lleva ${info.prize} pesos.`));
     }
 }
 
@@ -236,36 +283,30 @@ function updateUI() {
     }
 }
 
-function removePlayer(id) { window.db_firebase.collection("jugadores").doc(id).delete(); }
+function removePlayer(id) {
+    if (confirm("¿Eliminar este jugador?")) {
+        window.db_firebase.collection("jugadores").doc(id).delete();
+    }
+}
 window.removePlayer = removePlayer;
 
 function init() {
-    startBtn?.addEventListener('click', () => {
-        getAudioCtx(); // Activar audio al primer clic
-        startNewRound();
-    });
+    startBtn?.addEventListener('click', () => { getAudioCtx(); startNewRound(); });
     
     document.getElementById('clearPlayersBtn')?.addEventListener('click', async () => {
-        if (!confirm("¿Limpiar todo?")) return;
+        if (!confirm("¿Limpiar toda la mesa?")) return;
         const snap = await window.db_firebase.collection("jugadores").get();
         const batch = window.db_firebase.batch();
         snap.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        window.db_firebase.collection("juego").doc("estado").update({ ganador: null, bolas: [] });
+        window.db_firebase.collection("juego").doc("estado").set({ ganador: null, bolas: [], ronda: 1, jackpot: 10000 });
     });
 
-    document.getElementById('addPlayerBtn')?.addEventListener('click', () => {
-        getAudioCtx();
-        const name = playerNameInput.value.trim();
-        if (!name) return;
-        localStorage.setItem('bingo_my_name', name);
-        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
-        window.db_firebase.collection("jugadores").add({ name, timestamp: firebase.firestore.FieldValue.serverTimestamp(), status: 'pendiente' });
-        playerNameInput.value = '';
-    });
-
+    document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
+    
     document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
-        document.getElementById('winnerOverlay').classList.remove('active');
+        const overlay = document.getElementById('winnerOverlay');
+        if (overlay) overlay.classList.remove('active');
         isRoundFinished = false;
         if (!isPlayerMode) {
             winnerInfo = null;
@@ -274,7 +315,7 @@ function init() {
             startBtn.disabled = false;
         }
     });
-    
+
     setupFirebaseSync();
     
     const mb = document.getElementById('masterBoard');
