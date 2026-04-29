@@ -63,7 +63,7 @@ function setupFirebaseSync() {
     window.db_firebase.collection("jugadores").onSnapshot((snap) => {
         players = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderPlayers();
-    }, err => console.error("Error Firebase Jugadores:", err));
+    }, err => console.error("Error Firebase:", err));
 
     window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
         if (doc.exists) {
@@ -178,20 +178,21 @@ function addPlayer() {
     getAudioCtx();
     const name = playerNameInput.value.trim();
     if (!name) return alert("Escribe tu nombre.");
-    if (players.length >= 30) return alert("Cupo lleno.");
+    if (players.length >= 30) return alert("Mesa llena.");
 
-    localStorage.setItem('bingo_my_name', name);
-    speakText(`Bienvenido ${name}. Completa tu pago para entrar al sorteo.`);
+    // 1. ABRIR PAGO PRIMERO (PARA EVITAR BLOQUEO DEL NAVEGADOR)
+    window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
 
-    // GUARDAR DIRECTO SIN CONFIRMACIÓN (PARA EVITAR BLOQUEOS)
+    // 2. GUARDAR EN FIREBASE
     window.db_firebase.collection("jugadores").add({
         name: name,
         time: Date.now(),
         status: 'pendiente'
     });
 
-    // Abrir pago
-    window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+    // 3. HABLAR Y LIMPIAR
+    localStorage.setItem('bingo_my_name', name);
+    speakText(`Bienvenido ${name}. Completa tu pago para entrar.`);
     playerNameInput.value = '';
 }
 
