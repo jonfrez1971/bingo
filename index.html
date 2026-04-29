@@ -124,22 +124,21 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
 
     <script>
-        // CONFIGURACIÓN DE FIREBASE (El usuario debe pegar sus llaves aquí)
+        // CONFIGURACIÓN DE FIREBASE REAL
         const firebaseConfig = {
-            apiKey: "PEGA_AQUI_TU_API_KEY",
-            authDomain: "TU_PROYECTO.firebaseapp.com",
-            projectId: "TU_PROYECTO_ID",
-            storageBucket: "TU_PROYECTO.appspot.com",
-            messagingSenderId: "TU_ID",
-            appId: "TU_APP_ID"
+            apiKey: "AIzaSyCbmQuWhQlrgqJT-QhG7nf_BHaxcu_ZFVU",
+            authDomain: "bingo-7d78b.firebaseapp.com",
+            projectId: "bingo-7d78b",
+            storageBucket: "bingo-7d78b.firebasestorage.app",
+            messagingSenderId: "568411995628",
+            appId: "1:568411995628:web:e673de6940ee233ab654c9",
+            measurementId: "G-NYXKPH2SW3"
         };
 
-        // Inicializar Firebase solo si las llaves no son placeholders
-        if (firebaseConfig.apiKey !== "PEGA_AQUI_TU_API_KEY") {
-            firebase.initializeApp(firebaseConfig);
-            window.db_firebase = firebase.firestore();
-            console.log("Firebase Conectado");
-        }
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        window.db_firebase = firebase.firestore();
+        console.log("Firebase Bingo Conectado ✅");
     </script>
 
     <script>
