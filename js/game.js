@@ -24,6 +24,7 @@ const playerNameInput = document.getElementById('playerNameInput');
 const currentBallEl = document.getElementById('currentBall');
 const jackpotDisplay = document.getElementById('jackpotDisplay');
 const roundDisplay = document.getElementById('roundDisplay');
+const bingoCage = document.getElementById('bingoCage');
 
 // Global State
 let players = [];
@@ -32,7 +33,6 @@ let roundNumber = 1;
 let jackpot = 10000;
 let isRoundFinished = false;
 let participants = [];
-let raffleWinnerIds = [];
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -40,15 +40,11 @@ const isPlayerMode = new URLSearchParams(window.location.search).get('mode') ===
 function setupFirebaseSync() {
     if (!window.db_firebase) return;
 
-    // Escuchar jugadores con persistencia forzada
     window.db_firebase.collection("jugadores").onSnapshot((snap) => {
         players = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderPlayers();
-    }, err => {
-        console.error("Error Firebase:", err);
     });
 
-    // Escuchar estado del juego y forzar UI
     window.db_firebase.collection("juego").doc("estado").onSnapshot((doc) => {
         if (doc.exists) {
             const d = doc.data();
@@ -56,6 +52,7 @@ function setupFirebaseSync() {
             jackpot = d.jackpot || 10000;
             roundNumber = d.ronda || 1;
             updateUI();
+            updateMasterBoardUI(); // ¡Sincronizar tablero maestro!
             renderPlayers();
         }
     });
@@ -70,18 +67,20 @@ function syncGameState() {
     });
 }
 
-async function clearAllPlayers() {
-    if (!confirm("¿Borrar todos los jugadores?")) return;
-    const snap = await window.db_firebase.collection("jugadores").get();
-    const batch = window.db_firebase.batch();
-    snap.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
+function updateMasterBoardUI() {
+    // Limpiar y marcar
+    for (let i = 1; i <= 90; i++) {
+        const mc = document.getElementById(`master-cell-${i}`);
+        if (mc) {
+            if (drawnBalls.includes(i)) mc.classList.add('called');
+            else mc.classList.remove('called');
+        }
+    }
 }
 
 function renderPlayers() {
     playersGrid.innerHTML = '';
     const myName = localStorage.getItem('bingo_my_name');
-    
     players.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'player-card' + (p.name === myName ? ' my-card' : '');
@@ -103,23 +102,6 @@ function renderPlayers() {
         `;
         playersGrid.appendChild(card);
     });
-    const title = document.getElementById('playersCountTitle');
-    if (title) title.textContent = `Jugadores (${players.length})`;
-}
-
-function addPlayer() {
-    const name = playerNameInput.value.trim();
-    if (!name) return alert("Escribe tu nombre");
-    localStorage.setItem('bingo_my_name', name);
-    if (confirm(`¿Inscribir a ${name} y pagar?`)) {
-        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
-        window.db_firebase.collection("jugadores").add({
-            name: name,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            status: 'pendiente'
-        });
-        playerNameInput.value = '';
-    }
 }
 
 function startNewRound() {
@@ -140,13 +122,21 @@ function startNewRound() {
         participants.push({...p, name: user.nombre, cardId: pObj.id});
     });
 
-    const selected = [...participants].sort(()=>0.5-Math.random()).slice(0,2);
-    raffleWinnerIds = selected.map(p => p.user_id);
-    const raffleEl = document.getElementById('raffleName');
-    if (raffleEl) raffleEl.textContent = selected.map(p=>p.name).join(' y ');
+    document.getElementById('raffleOverlay').classList.add('active');
+    setTimeout(() => {
+        document.getElementById('raffleOverlay').classList.remove('active');
+        spinCageAndDraw();
+    }, 3000);
+}
+
+function spinCageAndDraw() {
+    if (isRoundFinished || drawnBalls.length >= 90) return;
+    if (bingoCage) bingoCage.classList.add('spinning');
     
-    // Iniciar dibujo
-    setTimeout(drawBall, 3000);
+    setTimeout(() => {
+        if (bingoCage) bingoCage.classList.remove('spinning');
+        drawBall();
+    }, 2000);
 }
 
 function drawBall() {
@@ -155,17 +145,22 @@ function drawBall() {
     do { ball = Math.floor(Math.random()*90)+1; } while (drawnBalls.includes(ball));
     drawnBalls.push(ball);
     syncGameState();
-    currentBallEl.textContent = ball;
     
-    // Hablar
-    if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance(ball.toString()));
-
-    // Marcar en tablero
-    const mc = document.getElementById(`master-cell-${ball}`);
-    if (mc) mc.classList.add('called');
+    currentBallEl.textContent = ball;
+    currentBallEl.style.opacity = 1;
+    currentBallEl.classList.add('pulse');
+    setTimeout(() => currentBallEl.classList.remove('pulse'), 500);
+    
+    // Locutor
+    if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(ball.toString());
+        u.lang = 'es-ES';
+        u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+    }
 
     checkWinners();
-    if (!isRoundFinished) setTimeout(drawBall, 4000);
+    if (!isRoundFinished) setTimeout(spinCageAndDraw, 4000);
 }
 
 function checkWinners() {
@@ -173,11 +168,9 @@ function checkWinners() {
         const hits = p.carton.filter(n => drawnBalls.includes(n)).length;
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
-            alert("¡BINGO! Ganó " + p.name);
-            const wName = document.getElementById('winnerName');
-            const wOverlay = document.getElementById('winnerOverlay');
-            if (wName) wName.textContent = p.name;
-            if (wOverlay) wOverlay.classList.add('active');
+            document.getElementById('winnerName').textContent = p.name;
+            document.getElementById('winnerOverlay').classList.add('active');
+            if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance("¡Bingo! Tenemos un ganador."));
         }
     });
 }
@@ -192,8 +185,23 @@ window.removePlayer = removePlayer;
 
 function init() {
     startBtn?.addEventListener('click', startNewRound);
-    clearPlayersBtn?.addEventListener('click', clearAllPlayers);
-    document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
+    document.getElementById('clearPlayersBtn')?.addEventListener('click', async () => {
+        if (!confirm("¿Borrar todos?")) return;
+        const snap = await window.db_firebase.collection("jugadores").get();
+        const batch = window.db_firebase.batch();
+        snap.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+    });
+
+    document.getElementById('addPlayerBtn')?.addEventListener('click', () => {
+        const name = playerNameInput.value.trim();
+        if (!name) return;
+        localStorage.setItem('bingo_my_name', name);
+        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+        window.db_firebase.collection("jugadores").add({ name, timestamp: firebase.firestore.FieldValue.serverTimestamp(), status: 'pendiente' });
+        playerNameInput.value = '';
+    });
+
     document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
         document.getElementById('winnerOverlay').classList.remove('active');
         startBtn.disabled = false;
@@ -201,8 +209,23 @@ function init() {
     
     setupFirebaseSync();
     
+    // Crear tablero maestro una sola vez
     const mb = document.getElementById('masterBoard');
-    if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
+    if (mb) {
+        mb.innerHTML = '';
+        for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`;
+    }
+
+    // Llenar balotera visual
+    if (bingoCage) {
+        for (let i = 0; i < 30; i++) {
+            const b = document.createElement('div');
+            b.className = 'cage-ball';
+            b.style.left = Math.random()*80 + '%';
+            b.style.top = Math.random()*80 + '%';
+            bingoCage.appendChild(b);
+        }
+    }
 }
 
 window.addEventListener('DOMContentLoaded', init);
