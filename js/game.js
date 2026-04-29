@@ -391,25 +391,39 @@ function removePlayer(id) {
 
 function renderPlayers() {
     playersGrid.innerHTML = '';
-    
-    // En modo jugador, queremos que NUESTRO cartón salga primero
     const myName = localStorage.getItem('bingo_my_name');
     
-    // Ordenar: mi cartón primero, luego los demás
     const sortedPlayers = [...players].sort((a, b) => {
         if (a.name === myName) return -1;
         if (b.name === myName) return 1;
         return 0;
     });
 
-    sortedPlayers.forEach((p, index) => {
+    sortedPlayers.forEach((p) => {
         const card = document.createElement('div');
         card.className = 'player-card';
-        if (p.name === myName) card.classList.add('my-card'); // Clase especial para resaltar
-        card.id = `player-card-${p.id || p.cardId}`;
+        if (p.name === myName) card.classList.add('my-card');
+        card.id = `player-card-${p.id}`;
         
         const isPending = p.status === 'pendiente_pago';
+        const carton = p.carton || []; // Obtener cartón de Firebase
         
+        // Calcular aciertos basados en las bolas cantadas (llamadas desde Firebase)
+        let hits = 0;
+        let numbersHtml = '';
+        
+        if (carton.length > 0) {
+            numbersHtml = carton.map((n) => {
+                const isMarked = calledNumbers.includes(n);
+                if (isMarked) hits++;
+                return `<div class="number-capsule ${isMarked ? 'marked' : ''}">${n}</div>`;
+            }).join('');
+        } else {
+            numbersHtml = '<div class="number-capsule">-</div>'.repeat(5);
+        }
+
+        const progressPercent = (hits / 5) * 100;
+
         card.innerHTML = `
             <div class="card-top">
                 <span class="player-card-name" style="white-space: normal; overflow: visible;">
@@ -419,19 +433,15 @@ function renderPlayers() {
                 ${isPending ? '<span style="font-size:0.5rem; color:var(--accent); font-weight:bold; display:block;">PAGO PENDIENTE</span>' : ''}
                 <button class="delete-btn" onclick="removePlayer('${p.id}')" style="margin-left: auto;">🗑️</button>
             </div>
-            <div class="card-numbers" id="numbers-${p.id || p.cardId}">
-                <div class="number-capsule">-</div>
-                <div class="number-capsule">-</div>
-                <div class="number-capsule">-</div>
-                <div class="number-capsule">-</div>
-                <div class="number-capsule">-</div>
+            <div class="card-numbers">
+                ${numbersHtml}
             </div>
             <div class="progress-info">
                 <span>Progreso</span>
-                <span id="progress-text-${p.id}">0/5</span>
+                <span>${hits}/5</span>
             </div>
             <div class="progress-container">
-                <div class="progress-bar" id="progress-bar-${p.id}"></div>
+                <div class="progress-bar" style="width: ${progressPercent}%"></div>
             </div>
         `;
         playersGrid.appendChild(card);
@@ -515,18 +525,23 @@ function startNewRound() {
         return;
     }
 
-    players.forEach((playerObj, index) => {
+    players.forEach((playerObj) => {
+        const carton = generateRandomCard(numPerCard);
+        
+        // Actualizar en Firebase para que el jugador vea su cartón
+        if (window.db_firebase) {
+            window.db_firebase.collection("jugadores").doc(playerObj.id).update({
+                carton: carton,
+                status: 'jugando'
+            });
+        }
+
         let user = db.getAllUsers().find(u => u.nombre === playerObj.name);
         if (!user) user = db.createUser(playerObj.name);
-        const carton = generateRandomCard(numPerCard);
         
         try {
             const p = db.addParticipante(currentRound.ronda_id, user.user_id, carton);
             participants.push({ ...p, name: user.nombre, cardId: playerObj.id, warningsGiven: [] });
-            
-            const numContainer = document.getElementById(`numbers-${playerObj.id}`);
-            let numbersHtml = carton.map((n, idx) => `<div class="number-capsule" id="cell-${p.participante_id}-${idx}">${n}</div>`).join('');
-            numContainer.innerHTML = numbersHtml;
         } catch(e) { console.error(e); }
     });
 
