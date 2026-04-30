@@ -388,7 +388,14 @@ function checkWinners() {
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
             const wonJackpot = raffleWinnerIds.includes(p.name);
-            winnerInfo = { name: p.name, prize: wonJackpot ? (base + jackpot) : base };
+            const totalPrize = wonJackpot ? (base + jackpot) : base;
+            winnerInfo = { name: p.name, prize: totalPrize, isJackpot: wonJackpot };
+            
+            // If jackpot won, reset it for the next round
+            if (wonJackpot) {
+                jackpot = 10000; // Reset to base value
+            }
+            
             syncGameState();
             showWinnerOverlay(winnerInfo);
         }
@@ -400,10 +407,20 @@ function showWinnerOverlay(info) {
     const wOverlay = document.getElementById('winnerOverlay');
     const wName = document.getElementById('winnerName');
     const wPrize = document.getElementById('winnerPrize');
+    
     if (wName) wName.textContent = info.name;
     if (wPrize) wPrize.textContent = `Premio: $${info.prize.toLocaleString()}`;
-    if (wOverlay) wOverlay.classList.add('active');
-    speakText(`¡Bingo! Ganador ${info.name}.`);
+    
+    if (wOverlay) {
+        wOverlay.classList.add('active');
+        if (info.isJackpot) {
+            wOverlay.classList.add('jackpot-win');
+            speakText(`¡ATENCIÓN! Bingo y ganador del acumulado: ${info.name}. Premio total: ${info.prize} pesos.`);
+        } else {
+            wOverlay.classList.remove('jackpot-win');
+            speakText(`¡Bingo! Ganador: ${info.name}.`);
+        }
+    }
 }
 
 function updateUI() {
