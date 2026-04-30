@@ -56,6 +56,34 @@ function speakText(text) {
     }
 }
 
+// Procedural Audio Effects (Luxury Details)
+function playPopSound() {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(10, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.1);
+}
+
+function playCashSound() {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1760, now + 0.05);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(now + 0.1);
+}
+
 // Firebase Sync
 function setupFirebaseSync() {
     if (!window.db_firebase) return;
@@ -142,7 +170,12 @@ function renderPlayers() {
     const title = document.getElementById('playersCountTitle');
     if (title) title.textContent = `Jugadores (${players.length})`;
 
-    const sorted = [...players].sort((a,b) => (a.name === myName ? -1 : b.name === myName ? 1 : 0));
+    // Pin my card to the top
+    const sorted = [...players].sort((a,b) => {
+        if (a.name === myName) return -1;
+        if (b.name === myName) return 1;
+        return 0;
+    });
 
     sorted.forEach((p) => {
         const card = document.createElement('div');
@@ -160,64 +193,105 @@ function renderPlayers() {
 
         card.innerHTML = `
             <div class="card-top">
-                <span class="player-card-name" style="font-size:0.8rem;">
-                    ${isWinnerInRaffle ? '🏆 ' : ''}${p.name === myName ? '⭐ ' : ''}${isPending ? '⏳ ' : ''}${p.name}
+                <span class="player-card-name" style="font-size:0.85rem; font-weight:900;">
+                    ${isWinnerInRaffle ? '🏆 ' : ''}${p.name === myName ? '⭐ ' : ''}${isPending ? '<span style="color:var(--accent); animation:pulse 1s infinite;">⏳ </span>' : ''}${p.name}
                 </span>
-                ${p.name === myName ? '<span style="font-size:0.5rem; color:var(--accent);">MI CARTÓN</span>' : ''}
-                ${!isPlayerMode ? `<button onclick="removePlayer('${p.id}')" style="margin-left:auto; background:none; border:none; color:white; cursor:pointer;">🗑️</button>` : ''}
+                ${p.name === myName ? '<span style="font-size:0.6rem; color:var(--secondary); font-weight:bold;">MI CARTÓN</span>' : ''}
+                ${!isPlayerMode ? `<button onclick="removePlayer('${p.id}')" style="margin-left:auto; background:none; border:none; color:rgba(255,255,255,0.3); cursor:pointer; font-size:0.8rem;">🗑️</button>` : ''}
             </div>
+            ${isPending ? '<div style="font-size:0.6rem; color:var(--accent); text-align:center; font-weight:bold; margin-bottom:5px;">PAGO PENDIENTE</div>' : ''}
             <div class="card-numbers">${nums}</div>
-            <div class="progress-info"><span>Progreso</span><span>${hits}/5</span></div>
+            <div class="progress-info" style="margin-top:5px;"><span>Progreso</span><span>${hits}/5</span></div>
             <div class="progress-container"><div class="progress-bar" style="width:${(hits/5)*100}%"></div></div>
         `;
         playersGrid.appendChild(card);
     });
 }
 
-function addPlayer() {
+async function addPlayer() {
     getAudioCtx();
     const name = playerNameInput.value.trim();
-    if (!name) return alert("Escribe tu nombre.");
-    if (players.length >= 30) return alert("Mesa llena.");
+    if (!name) return alert("Por favor, escribe tu nombre.");
+    
+    // Check duplicates
+    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        return alert("Este nombre ya está en juego. Por favor usa un apellido o número.");
+    }
+    
+    if (players.length >= 30) return alert("Lo sentimos, la mesa está llena (Máximo 30 jugadores).");
 
-    // 1. ABRIR PAGO PRIMERO (PARA EVITAR BLOQUEO DEL NAVEGADOR)
-    window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
+    try {
+        // 1. REGISTRAR PRIMERO (CON AWAIT PARA ASEGURAR QUE SE GUARDE)
+        await window.db_firebase.collection("jugadores").add({
+            name: name,
+            time: Date.now(),
+            status: 'pendiente',
+            carton: []
+        });
 
-    // 2. GUARDAR EN FIREBASE
-    window.db_firebase.collection("jugadores").add({
-        name: name,
-        time: Date.now(),
-        status: 'pendiente'
-    });
+        // 2. HABLAR BIENVENIDA Y SONIDO
+        playCashSound();
+        speakText(`Bienvenido ${name}. Por favor completa tu pago en la nueva pestaña para entrar al sorteo.`);
+        
+        // 3. ABRIR PAGO
+        window.open("https://checkout.bold.co/payment/LNK_TYRW5PQ2S8", "_blank");
 
-    // 3. HABLAR Y LIMPIAR
-    localStorage.setItem('bingo_my_name', name);
-    speakText(`Bienvenido ${name}. Completa tu pago para entrar.`);
-    playerNameInput.value = '';
+        // 4. PERSISTENCIA LOCAL
+        localStorage.setItem('bingo_my_name', name);
+        playerNameInput.value = '';
+        
+    } catch (err) {
+        console.error("Error al registrar:", err);
+        alert("Hubo un error al registrarte. Revisa tu conexión.");
+    }
 }
 
 function startNewRound() {
     if (isPlayerMode) return;
-    if (players.length === 0) return alert("No hay jugadores.");
+    if (players.length === 0) return alert("¡Agrega al menos un jugador para empezar!");
+    
     startBtn.disabled = true;
     drawnBalls = [];
     isRoundFinished = false;
     winnerInfo = null;
 
-    jackpot += players.length * 1000;
-    currentRound = db.createRonda(jackpot);
+    // Acumulado Logic: Incrementar por jugador
+    const increment = players.length * 1000;
+    jackpot += increment;
+    
+    // Create internal DB record
+    const currentRound = db.createRonda(jackpot);
     roundNumber = currentRound.ronda_id;
 
+    // Reset players in Firebase and assign random cards
     participants = [];
     players.forEach(pObj => {
-        const carton = Array.from({length:5},()=>Math.floor(Math.random()*90)+1).sort((a,b)=>a-b);
-        window.db_firebase.collection("jugadores").doc(pObj.id).update({ carton, status: 'jugando' });
+        const carton = [];
+        while(carton.length < 5) {
+            const n = Math.floor(Math.random() * 90) + 1;
+            if(!carton.includes(n)) carton.push(n);
+        }
+        carton.sort((a,b) => a - b);
+        
+        window.db_firebase.collection("jugadores").doc(pObj.id).update({ 
+            carton: carton, 
+            status: 'jugando' 
+        });
+
+        // Sync with local simulated DB
         const user = db.createUser(pObj.name);
-        const p = db.addParticipante(currentRound.ronda_id, user.user_id, carton);
-        participants.push({...p, name: user.nombre, cardId: pObj.id});
+        const p = db.addParticipante(roundNumber, user.user_id, carton);
+        participants.push({...p, name: pObj.name, cardId: pObj.id});
     });
 
-    const selected = [...participants].sort(()=>0.5-Math.random()).slice(0, 2);
+    // Raffle for the Jackpot
+    const eligible = [...participants];
+    const selected = [];
+    while(selected.length < 2 && eligible.length > 0) {
+        const idx = Math.floor(Math.random() * eligible.length);
+        selected.push(eligible.splice(idx, 1)[0]);
+    }
+    
     raffleWinnerIds = selected.map(p => p.name);
     isRaffleActive = true;
     syncGameState();
@@ -243,6 +317,7 @@ function drawBall() {
     let ball;
     do { ball = Math.floor(Math.random()*90)+1; } while (drawnBalls.includes(ball));
     drawnBalls.push(ball);
+    playPopSound();
     syncGameState();
     checkWinners();
     if (!isRoundFinished) setTimeout(spinCageAndDraw, 4500);
@@ -289,6 +364,17 @@ function removePlayer(id) {
 }
 window.removePlayer = removePlayer;
 
+function clearAllPlayers() {
+    if (isPlayerMode) return;
+    if (confirm("¿ESTÁS SEGURO? Esto borrará a TODOS los jugadores de la mesa.")) {
+        players.forEach(p => {
+            window.db_firebase.collection("jugadores").doc(p.id).delete();
+        });
+        alert("Mesa limpia.");
+    }
+}
+window.clearAllPlayers = clearAllPlayers;
+
 function init() {
     if (isPlayerMode) {
         const sBtn = document.getElementById('startBtn');
@@ -299,6 +385,7 @@ function init() {
 
     startBtn?.addEventListener('click', () => { getAudioCtx(); startNewRound(); });
     document.getElementById('addPlayerBtn')?.addEventListener('click', addPlayer);
+    document.getElementById('clearPlayersBtn')?.addEventListener('click', clearAllPlayers);
     
     document.getElementById('nextRoundBtn')?.addEventListener('click', () => {
         const overlay = document.getElementById('winnerOverlay');
