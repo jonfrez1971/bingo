@@ -34,7 +34,24 @@
         <!-- Left Column: Game Control & Stats -->
         <aside class="caller-section glass-panel">
             
-            <!-- 1. Bold & Nequi Section (ARRIBA) -->
+            <!-- 1. Balotera (ARRIBA) -->
+            <div class="current-ball-container">
+                <div class="status-label">Sorteando Número...</div>
+                <div class="bingo-cage-container" id="bingoCageContainer">
+                    <div class="bingo-cage" id="bingoCage"></div>
+                    <div class="current-ball" id="currentBall" style="opacity: 0;">--</div>
+                </div>
+            </div>
+
+            <!-- 2. Tablero Maestro (AHORA ARRIBA) -->
+            <div>
+                <div class="status-label" style="text-align: center; margin-bottom: 10px;">Tablero Maestro (1-90)</div>
+                <div class="master-board" id="masterBoard"></div>
+            </div>
+
+            <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 15px 0;">
+
+            <!-- 3. Bold & Nequi Section -->
             <div class="glass-panel" style="background: rgba(138, 43, 226, 0.2); border: 2px solid var(--primary); text-align: center; padding: 15px;">
                 <div class="status-label" style="color: #fff; font-weight: bold; letter-spacing: 2px;">Entrada al Juego</div>
                 <div style="font-size: 1.1rem; margin: 5px 0; color: white;">Valor Ronda: <strong style="color: var(--secondary); font-size: 1.3rem;">$4,000</strong></div>
@@ -46,62 +63,45 @@
                 </div>
             </div>
 
-            <!-- 2. Raffle Section -->
-            <div class="raffle-box glass-panel" style="padding: 15px;">
+            <!-- 4. Raffle Section -->
+            <div class="raffle-box glass-panel" style="padding: 15px; margin-top: 10px;">
                 <div class="status-label">Sorteo Acumulado</div>
                 <div class="raffle-name" id="raffleName" style="font-size: 1.2rem; margin: 10px 0;">--</div>
                 <p style="font-size:0.75rem; color: var(--text-muted);">¡Ellos van por el Acumulado!</p>
             </div>
             
-            <!-- 3. Winners Section -->
+            <!-- 5. Winners Section -->
             <div style="margin-top: 10px;">
                 <div class="status-label">Últimos Ganadores</div>
                 <div id="winnersList" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-                    <!-- Winners history -->
+                    <!-- Winners history will be injected here -->
                 </div>
-            </div>
-
-            <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 20px 0;">
-
-            <!-- 4. Balotera (ABAJO) -->
-            <div class="current-ball-container">
-                <div class="status-label">Sorteando Número...</div>
-                <div class="bingo-cage-container" id="bingoCageContainer">
-                    <div class="bingo-cage" id="bingoCage"></div>
-                    <div class="current-ball" id="currentBall" style="opacity: 0;">--</div>
-                </div>
-            </div>
-
-            <!-- 5. Tablero Maestro (FINAL) -->
-            <div>
-                <div class="status-label" style="text-align: center; margin-bottom: 10px;">Tablero Maestro (1-90)</div>
-                <div class="master-board" id="masterBoard"></div>
             </div>
             
         </aside>
 
         <!-- Right Column: Players & Cards -->
         <section class="players-section">
-            <div class="section-header" style="flex-direction: column; align-items: flex-start; gap: 15px;">
-                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div class="section-title" id="playersCountTitle">Jugadores (0)</div>
-                        <button id="clearPlayersBtn" class="btn" style="padding: 5px 10px; font-size: 0.7rem; background: var(--accent);">LIMPIAR TODO</button>
+            
+            <!-- Admin Control Panel -->
+            <div class="glass-panel" style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h2 id="playersCountTitle" style="font-size: 1.5rem; font-weight: 900; color: var(--secondary);">Jugadores (0)</h2>
+                        <div class="status-label" style="font-size: 0.7rem;">Mesa activa - 30 cupos max</div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn" id="startBtn">Iniciar Nueva Ronda</button>
+                        <button class="btn" id="clearPlayersBtn" style="background: var(--accent); padding: 8px 15px; font-size: 0.8rem;">LIMPIAR MESA</button>
+                        <button class="btn" id="startBtn">INICIAR RONDA</button>
                     </div>
                 </div>
-                
-                <!-- Player Refresh Button -->
-                <div style="width: 100%; text-align: center; margin-bottom: 10px;">
-                    <button onclick="location.reload()" class="btn" style="background: var(--secondary); padding: 8px 15px; font-size: 0.7rem; border-radius: 50px; color: #000; font-weight: bold;">🔄 ACTUALIZAR JUEGO</button>
-                </div>
-                
-                <!-- Dynamic Player Registration -->
-                <div class="registration-box glass-panel" style="width: 100%; display: flex; gap: 10px; padding: 15px; border: 1px solid var(--secondary);">
-                    <input type="text" id="playerNameInput" class="player-input" placeholder="Tu Nombre para jugar" style="flex: 1;">
-                    <button id="addPlayerBtn" class="btn" style="padding: 10px 20px; background: var(--secondary); color: #000;">Pagar y Entrar</button>
+
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div class="registration-box" style="flex: 1; display: flex; gap: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 12px; border: 1px solid var(--secondary);">
+                        <input type="text" id="playerNameInput" class="player-input" placeholder="Ingresa tu nombre para jugar..." style="border: none; background: transparent;">
+                        <button id="addPlayerBtn" class="btn" style="background: var(--secondary); color: #000; padding: 10px 20px;">PAGAR Y ENTRAR</button>
+                    </div>
+                    <button onclick="location.reload()" class="btn" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 12px; font-size: 1.2rem;">🔄</button>
                 </div>
             </div>
 
