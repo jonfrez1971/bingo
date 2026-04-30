@@ -106,12 +106,17 @@ function setupFirebaseSync() {
 
             const rOverlay = document.getElementById('raffleOverlay');
             const rName = document.getElementById('raffleName');
+            const sRName = document.getElementById('sidebarRaffleName');
+            
             if (raffleActive && !isRaffleActive) {
-                if (rName) rName.textContent = raffleWinnerIds.join(' y ');
+                const names = raffleWinnerIds.join(' y ');
+                if (rName) rName.textContent = names;
+                if (sRName) sRName.textContent = names;
                 if (rOverlay) rOverlay.classList.add('active');
-                speakText("Sorteando acumulado. Atentos: " + raffleWinnerIds.join(' y '));
+                speakText("Sorteando acumulado. Atentos: " + names);
             } else if (!raffleActive && isRaffleActive) {
                 if (rOverlay) rOverlay.classList.remove('active');
+                // Keep the names in the sidebar so people know who won the raffle
             }
             isRaffleActive = raffleActive;
 
