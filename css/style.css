@@ -633,3 +633,52 @@ main {
     border-radius: 10px;
     z-index: 10;
 }
+
+.overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: all 0.5s ease;
+}
+
+.overlay.active {
+    visibility: visible;
+    opacity: 1;
+}
+
+.overlay-content {
+    text-align: center;
+    padding: 40px;
+    background: var(--panel-bg);
+    border: 2px solid var(--secondary);
+    border-radius: 30px;
+    box-shadow: 0 0 50px var(--secondary-glow);
+    max-width: 80%;
+}
+
+.bingo-title {
+    font-size: 5rem;
+    font-weight: 900;
+    color: var(--secondary);
+    text-shadow: 0 0 30px var(--secondary-glow);
+    animation: bounce 1s infinite alternate;
+}
+
+@keyframes bounce {
+    from { transform: translateY(0); }
+    to { transform: translateY(-20px); }
+}
+
+.raffle-spinner {
+    margin: 20px 0;
+    padding: 20px;
+    border: 2px dashed var(--accent);
+    border-radius: 20px;
+    background: rgba(255, 0, 127, 0.1);
+}

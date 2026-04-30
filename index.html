@@ -66,7 +66,7 @@
             <!-- 4. Raffle Section -->
             <div class="raffle-box glass-panel" style="padding: 15px; margin-top: 10px;">
                 <div class="status-label">Sorteo Acumulado</div>
-                <div class="raffle-name" id="raffleName" style="font-size: 1.2rem; margin: 10px 0;">--</div>
+                <div class="raffle-name" id="sidebarRaffleName" style="font-size: 1.2rem; margin: 10px 0;">--</div>
                 <p style="font-size:0.75rem; color: var(--text-muted);">¡Ellos van por el Acumulado!</p>
             </div>
             
@@ -132,10 +132,28 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (Compat Version for simplicity) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="js/firebase-config.js"></script>
+
+    <script>
+        // CONFIGURACIÓN DE FIREBASE REAL
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbmQuWhQlrgqJT-QhG7nf_BHaxcu_ZFVU",
+            authDomain: "bingo-7d78b.firebaseapp.com",
+            projectId: "bingo-7d78b",
+            storageBucket: "bingo-7d78b.firebasestorage.app",
+            messagingSenderId: "568411995628",
+            appId: "1:568411995628:web:e673de6940ee233ab654c9",
+            measurementId: "G-NYXKPH2SW3"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        window.db_firebase = firebase.firestore();
+        console.log("Firebase Bingo Spress Conectado ✅");
+    </script>
+
     <script src="js/game.js"></script>
 </body>
 </html>
