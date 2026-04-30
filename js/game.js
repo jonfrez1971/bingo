@@ -121,8 +121,12 @@ function setupFirebaseSync() {
             isRaffleActive = raffleActive;
 
             if (bingoCage) {
-                if (isSpinning) bingoCage.classList.add('spinning');
-                else bingoCage.classList.remove('spinning');
+                if (isSpinning) {
+                    bingoCage.classList.add('spinning');
+                    playCageSound();
+                } else {
+                    bingoCage.classList.remove('spinning');
+                }
             }
 
             if (newBalls.length > drawnBalls.length) {
@@ -270,7 +274,9 @@ function startNewRound() {
 
     // Reset players in Firebase and assign random cards
     participants = [];
-    players.forEach(pObj => {
+    
+    // Use a small delay for each player to avoid UI freeze
+    players.forEach((pObj, index) => {
         const carton = [];
         while(carton.length < 5) {
             const n = Math.floor(Math.random() * 90) + 1;
@@ -283,7 +289,6 @@ function startNewRound() {
             status: 'jugando' 
         });
 
-        // Sync with local simulated DB
         const user = db.createUser(pObj.name);
         const p = db.addParticipante(roundNumber, user.user_id, carton);
         participants.push({...p, name: pObj.name, cardId: pObj.id});
@@ -306,6 +311,53 @@ function startNewRound() {
         syncGameState();
         spinCageAndDraw();
     }, 6000);
+}
+
+// Procedural Cage Effect
+function createCageBalls() {
+    if (!bingoCage) return;
+    bingoCage.innerHTML = '';
+    for (let i = 0; i < 20; i++) {
+        const ball = document.createElement('div');
+        ball.className = 'cage-ball';
+        ball.style.left = Math.random() * 80 + 10 + '%';
+        ball.style.top = Math.random() * 80 + 10 + '%';
+        ball.style.animationDelay = Math.random() * 0.5 + 's';
+        bingoCage.appendChild(ball);
+    }
+}
+
+function playCageSound() {
+    const ctx = getAudioCtx();
+    const duration = 2.0;
+    const startTime = ctx.currentTime;
+    
+    const bufferSize = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(400, startTime);
+    filter.frequency.exponentialRampToValueAtTime(100, startTime + duration);
+    
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.05, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    
+    noise.start(startTime);
+    noise.stop(startTime + duration);
 }
 
 function spinCageAndDraw() {
@@ -404,6 +456,7 @@ function init() {
     });
 
     setupFirebaseSync();
+    createCageBalls();
     const mb = document.getElementById('masterBoard');
     if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
 }
