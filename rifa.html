@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinamicas J - Rifas Profesionales</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #d4af37;
+            --gold-glow: rgba(212, 175, 55, 0.5);
+            --dark-card: #1a1a1a;
+            --accent-rifa: #00f0ff;
+        }
+
+        body {
+            background: #050505;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding-bottom: 50px;
+        }
+
+        .hero-rifa {
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 2px solid var(--gold);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-rifa::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, var(--gold-glow) 0%, transparent 70%);
+            opacity: 0.2;
+        }
+
+        .logo-rifa {
+            font-size: 3rem;
+            font-weight: 900;
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin: 0;
+            text-shadow: 0 0 20px var(--gold-glow);
+        }
+
+        .lottery-banner {
+            background: var(--gold);
+            color: black;
+            padding: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-top: 20px;
+            border-radius: 50px;
+            display: inline-block;
+            padding: 10px 30px;
+            box-shadow: 0 0 20px var(--gold-glow);
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .progress-section {
+            background: var(--dark-card);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(212,175,55,0.2);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .progress-bar-bg {
+            height: 15px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--gold), #fff);
+            width: 0%;
+            transition: width 1s ease;
+            box-shadow: 0 0 15px var(--gold);
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 8px;
+            background: var(--dark-card);
+            padding: 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .number-box {
+            aspect-ratio: 1;
+            background: #333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .number-box:hover {
+            transform: scale(1.1);
+            background: #444;
+            border-color: var(--gold);
+        }
+
+        .number-box.taken {
+            background: #500;
+            color: #ff5555;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .number-box.selected {
+            background: var(--gold);
+            color: black;
+            box-shadow: 0 0 15px var(--gold);
+            transform: scale(1.1);
+            z-index: 2;
+        }
+
+        .prize-table {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .prize-card {
+            background: var(--dark-card);
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 4px solid var(--gold);
+            transition: transform 0.3s;
+        }
+
+        .prize-card:hover { transform: translateY(-5px); }
+
+        .prize-label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
+        .prize-value { font-size: 1.5rem; font-weight: 900; color: var(--gold); margin-top: 5px; }
+
+        .selection-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: 2px solid var(--gold);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .selection-bar.active {
+            visibility: visible;
+            opacity: 1;
+            bottom: 30px;
+        }
+
+        .btn-rifa {
+            background: var(--gold);
+            color: black;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .dia-num {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 900;
+            background: #222;
+        }
+
+        .dia-label {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .grid-container { grid-template-columns: repeat(5, 1fr); }
+            .logo-rifa { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <header class="hero-rifa">
+        <a href="index.html" style="position: absolute; left: 20px; top: 20px; color: var(--gold); text-decoration: none; font-size: 0.8rem; font-weight: bold; border: 1px solid var(--gold); padding: 5px 10px; border-radius: 10px;">⬅ VOLVER BINGO</a>
+        <h1 class="logo-rifa">Dinamicas J</h1>
+        <div style="color: white; font-weight: bold; margin-top: 10px; font-size: 1.2rem;">¡Gana hasta $700.000 pesos diarios! 💰</div>
+        <div class="lottery-banner" id="activeLottery">Cargando sorteo...</div>
+        <p style="color: var(--gold); margin-top: 15px; font-weight: bold;">Cierre: 9:00 PM</p>
+        
+        <!-- Video Tutorial Section -->
+        <div style="margin-top: 30px; display: flex; justify-content: center;">
+            <div style="width: 100%; max-width: 315px; border: 3px solid var(--gold); border-radius: 20px; overflow: hidden; box-shadow: 0 0 30px var(--gold-glow);">
+                <iframe width="100%" height="560" src="https://www.youtube.com/embed/u4r3nCdl_Hw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Progress Bar -->
+        <div class="progress-section">
+            <div class="progress-header">
+                <span>Progreso del Sorteo</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: #888; margin-top: 10px; text-align: center;">Mínimo 80% para realizar el sorteo hoy.</p>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-weight: 900;">Elige tu número</h2>
+            <div style="font-size: 0.9rem; color: var(--gold);">Valor puesto: $10.000</div>
+        </div>
+
+        <!-- Numbers Grid -->
+        <div class="grid-container" id="rifaGrid">
+            <!-- Numbers 00-99 will be injected here -->
+        </div>
+
+        <!-- Visual Prize Guide -->
+        <h2 style="margin-top: 40px; font-weight: 900; text-align: center;">5 Formas de Ganar</h2>
+        <div class="visual-guide glass-panel" style="margin-top: 20px; background: #111; border: 1px solid var(--gold); padding: 30px 10px; border-radius: 20px; overflow-x: auto;">
+            <div style="display: flex; justify-content: center; align-items: flex-end; gap: 10px; min-width: 500px;">
+                
+                <!-- Diagram Logic -->
+                <div style="text-align: center;">
+                    <div style="display: flex; gap: 8px; justify-content: center; position: relative; padding-bottom: 40px; padding-top: 40px;">
+                        <div class="dia-num" style="border-color: red; color: red;">9</div>
+                        <div class="dia-num">1</div>
+                        <div class="dia-num">5</div>
+                        <div class="dia-num" style="border-color: red; color: red;">3</div>
+                        
+                        <div style="width: 20px;"></div>
+
+                        <div class="dia-num" style="border-color: #00f0ff;">8</div>
+                        <div class="dia-num" style="border-color: #00f0ff;">2</div>
+                        <div class="dia-num" style="border-color: #00ff88; color: #00ff88;">4</div>
+
+                        <!-- Lines & Labels (Simulated) -->
+                        <div class="dia-label" style="top: 0; left: 0; width: 45px; border-bottom: 2px solid white; border-left: 2px solid white; border-right: 2px solid white; height: 15px;">
+                            <span style="position: absolute; top: -20px; left: 0; width: 100%; font-size: 0.6rem;">PRIMERAS 100K</span>
+                        </div>
+                        <div class="dia-label" style="top: 0; left: 106px; width: 45px; border-bottom: 2px solid white; border-left: 2px solid white; border-right: 2px solid white; height: 15px;">
+                            <span style="position: absolute; top: -20px; left: 0; width: 100%; font-size: 0.6rem;">ÚLTIMAS 500K</span>
+                        </div>
+                        <div class="dia-label" style="bottom: 0; left: 53px; width: 45px; border-top: 2px solid var(--gold); border-left: 2px solid var(--gold); border-right: 2px solid var(--gold); height: 15px;">
+                            <span style="position: absolute; bottom: -20px; left: 0; width: 100%; font-size: 0.6rem; color: var(--gold);">CENTRALES 50K</span>
+                        </div>
+                        <div class="dia-label" style="bottom: 0; left: 0; width: 150px; border-top: 2px solid red; border-left: 2px solid red; border-right: 2px solid red; height: 35px;">
+                            <span style="position: absolute; bottom: -35px; left: 0; width: 100%; font-size: 0.6rem; color: red;">1ra y ÚLTIMA 50K</span>
+                        </div>
+                        <div class="dia-label" style="bottom: 0; left: 280px; width: 20px; border-top: 2px solid #00ff88; border-left: 2px solid #00ff88; border-right: 2px solid #00ff88; height: 15px;">
+                            <span style="position: absolute; bottom: -20px; left: 0; width: 100%; font-size: 0.6rem; color: #00ff88;">SERIE 20K</span>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 40px;">Ejemplo: Si cae el 9153 Serie 824</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prize Summary -->
+        <div class="prize-table">
+            <div class="prize-card">
+                <div class="prize-label">2 Últimas Cifras</div>
+                <div class="prize-value">$500.000</div>
+            </div>
+            <div class="prize-card">
+                <div class="prize-label">2 Primeras Cifras</div>
+                <div class="prize-value">$100.000</div>
+            </div>
+            <div class="prize-card">
+                <div class="prize-label">2 Cifras Centrales</div>
+                <div class="prize-value">$50.000</div>
+            </div>
+            <div class="prize-card">
+                <div class="prize-label">Primera y Última</div>
+                <div class="prize-value">$50.000</div>
+            </div>
+            <div class="prize-card">
+                <div class="prize-label">Serie (Última cifra)</div>
+                <div class="prize-value">$20.000</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selection Float Bar -->
+    <div class="selection-bar" id="selectionBar">
+        <div>
+            <span style="color: var(--gold); font-size: 0.8rem; display: block;">Seleccionado</span>
+            <span id="selectedNumText" style="font-size: 1.5rem; font-weight: 900;">--</span>
+        </div>
+        <button class="btn-rifa" id="buyBtn">Apartar Número</button>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <script>
+        // CONFIGURACIÓN DE FIREBASE (Misma que el Bingo)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbmQuWhQlrgqJT-QhG7nf_BHaxcu_ZFVU",
+            authDomain: "bingo-7d78b.firebaseapp.com",
+            projectId: "bingo-7d78b",
+            storageBucket: "bingo-7d78b.firebasestorage.app",
+            messagingSenderId: "568411995628",
+            appId: "1:568411995628:web:e673de6940ee233ab654c9",
+            measurementId: "G-NYXKPH2SW3"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
+
+    <script src="js/rifa.js"></script>
+</body>
+</html>
