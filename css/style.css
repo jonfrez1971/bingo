@@ -94,14 +94,10 @@ header {
 }
 
 .version-tag {
-    font-weight: 800;
+    font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    animation: shimmer 2s infinite linear;
-    background: linear-gradient(90deg, var(--accent), #fff, var(--accent));
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+    display: inline-block;
 }
 
 @keyframes shimmer {
