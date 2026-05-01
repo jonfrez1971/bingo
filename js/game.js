@@ -244,9 +244,9 @@ async function addPlayer() {
     const name = playerNameInput.value.trim();
     if (!name) return alert("Por favor, escribe tu nombre.");
     
-    // Check duplicates
-    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-        return alert("Este nombre ya está en juego. Por favor usa un apellido o número.");
+    const nameCount = players.filter(p => p.name.toLowerCase() === name.toLowerCase()).length;
+    if (nameCount >= 2) {
+        return alert("Ya has comprado el máximo de 2 puestos permitidos.");
     }
     
     if (players.length >= 30) return alert("Lo sentimos, la mesa está llena (Máximo 30 jugadores).");
@@ -405,8 +405,11 @@ function drawBall() {
 }
 
 function checkWinners() {
-    if (isPlayerMode) return;
-    const base = (players.length * 4000) * 0.7;
+    if (isPlayerMode || isRoundFinished) return;
+    
+    const winners = [];
+    const baseTotal = (players.length * 4000) * 0.7;
+
     participants.forEach(p => {
         const hits = (p.carton || []).filter(n => drawnBalls.includes(n)).length;
         
@@ -416,21 +419,43 @@ function checkWinners() {
             syncGameState();
         }
 
-        if (hits === 5 && !isRoundFinished) {
-            isRoundFinished = true;
-            const wonJackpot = raffleWinnerIds.includes(p.name);
-            const totalPrize = wonJackpot ? (base + jackpot) : base;
-            winnerInfo = { name: p.name, prize: totalPrize, isJackpot: wonJackpot };
-            
-            // If jackpot won, reset it for the next round
-            if (wonJackpot) {
-                jackpot = 10000; // Reset to base value
-            }
-            
-            syncGameState();
-            showWinnerOverlay(winnerInfo);
+        if (hits === 5) {
+            winners.push(p);
         }
     });
+
+    if (winners.length > 0) {
+        isRoundFinished = true;
+        
+        // Determinar si alguno de los ganadores tenía el sorteo del acumulado
+        const jackpotWinners = winners.filter(w => raffleWinnerIds.includes(w.name));
+        const hasJackpotWinner = jackpotWinners.length > 0;
+        
+        // El premio fijo se divide entre todos los que hicieron Bingo
+        const prizePerWinner = baseTotal / winners.length;
+        
+        // El acumulado se divide solo entre los ganadores que estaban en el sorteo (si hay)
+        let jackpotPrizePerWinner = 0;
+        if (hasJackpotWinner) {
+            jackpotPrizePerWinner = jackpot / jackpotWinners.length;
+            jackpot = 10000; // Reset jackpot
+        }
+
+        const names = winners.map(w => w.name).join(' y ');
+        const totalPrize = hasJackpotWinner ? (prizePerWinner + jackpotPrizePerWinner) : prizePerWinner;
+
+        winnerInfo = { 
+            names: winners.map(w => w.name),
+            prizePerWinner: Math.floor(prizePerWinner),
+            jackpotPrizePerWinner: Math.floor(jackpotPrizePerWinner),
+            totalPrize: Math.floor(totalPrize),
+            isJackpot: hasJackpotWinner,
+            multipleWinners: winners.length > 1
+        };
+        
+        syncGameState();
+        showWinnerOverlay(winnerInfo);
+    }
 }
 
 function showWinnerOverlay(info) {
@@ -439,18 +464,67 @@ function showWinnerOverlay(info) {
     const wName = document.getElementById('winnerName');
     const wPrize = document.getElementById('winnerPrize');
     
-    if (wName) wName.textContent = info.name;
-    if (wPrize) wPrize.textContent = `Premio: $${info.prize.toLocaleString()}`;
+    const namesText = info.names.join(' y ');
+    if (wName) wName.textContent = namesText;
     
+    let prizeDetail = `Premio: $${info.totalPrize.toLocaleString()}`;
+    if (info.multipleWinners) {
+        prizeDetail = `Premio por ganador: $${info.totalPrize.toLocaleString()}`;
+    }
+    if (wPrize) wPrize.textContent = prizeDetail;
+    
+    // Add WhatsApp Button for payment
+    const existingWA = document.getElementById('waPaymentBtn');
+    if (existingWA) existingWA.remove();
+
+    const waBtn = document.createElement('button');
+    waBtn.id = 'waPaymentBtn';
+    waBtn.className = 'btn';
+    waBtn.style.background = '#25D366';
+    waBtn.style.marginTop = '20px';
+    waBtn.style.color = 'white';
+    waBtn.innerHTML = '📱 COBRAR PREMIO (WhatsApp)';
+    waBtn.onclick = () => {
+        const msg = encodeURIComponent(`Hola, gané en el Bingo Spress (Ronda #${roundNumber}). Mi nombre es: ${localStorage.getItem('bingo_my_name') || 'Ganador'}.`);
+        window.open(`https://wa.me/3147166778?text=${msg}`, '_blank');
+    };
+    wPrize.after(waBtn);
+
     if (wOverlay) {
         wOverlay.classList.add('active');
         if (info.isJackpot) {
             wOverlay.classList.add('jackpot-win');
-            speakText(`¡ATENCIÓN! Bingo y ganador del acumulado: ${info.name}. Premio total: ${info.prize} pesos.`);
+            if (info.multipleWinners) {
+                speakText(`¡ATENCIÓN! Hubo varios ganadores. El premio fijo se divide. Ganadores: ${namesText}. El acumulado se reparte entre los favorecidos.`);
+            } else {
+                speakText(`¡ATENCIÓN! Bingo y ganador del acumulado: ${namesText}. Premio total: ${info.totalPrize} pesos.`);
+            }
+            startConfetti();
         } else {
             wOverlay.classList.remove('jackpot-win');
-            speakText(`¡Bingo! Ganador: ${info.name}.`);
+            if (info.multipleWinners) {
+                speakText(`Hubieron ${info.names.length} ganadores en la ronda por lo tanto el premio fijo se divide. Felicidades a ${namesText}.`);
+            } else {
+                speakText(`¡Bingo! Ganador: ${namesText}.`);
+            }
         }
+    }
+}
+
+function startConfetti() {
+    // Simple procedural confetti
+    const colors = ['#8a2be2', '#00f0ff', '#ff007f', '#ffcc00'];
+    for (let i = 0; i < 50; i++) {
+        const confetto = document.createElement('div');
+        confetto.className = 'confetto';
+        confetto.style.left = Math.random() * 100 + 'vw';
+        confetto.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confetto.style.width = Math.random() * 10 + 5 + 'px';
+        confetto.style.height = Math.random() * 10 + 5 + 'px';
+        confetto.style.animationDuration = Math.random() * 3 + 2 + 's';
+        confetto.style.animationDelay = Math.random() * 2 + 's';
+        document.body.appendChild(confetto);
+        setTimeout(() => confetto.remove(), 5000);
     }
 }
 
