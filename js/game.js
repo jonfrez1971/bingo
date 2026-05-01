@@ -486,7 +486,7 @@ function showWinnerOverlay(info) {
     waBtn.innerHTML = '📱 COBRAR PREMIO (WhatsApp)';
     waBtn.onclick = () => {
         const msg = encodeURIComponent(`Hola, gané en el Bingo Spress (Ronda #${roundNumber}). Mi nombre es: ${localStorage.getItem('bingo_my_name') || 'Ganador'}.`);
-        window.open(`https://wa.me/3147166778?text=${msg}`, '_blank');
+        window.open(`https://wa.me/3151346112?text=${msg}`, '_blank');
     };
     wPrize.after(waBtn);
 
