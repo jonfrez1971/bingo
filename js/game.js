@@ -37,6 +37,7 @@ let raffleWinnerIds = [];
 let lastBallSpoken = 0;
 let isRaffleActive = false;
 let announced4Hits = new Set();
+let localAnnounced4Hits = new Set();
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -143,6 +144,15 @@ function setupFirebaseSync() {
             updateMasterBoardUI();
             renderPlayers();
 
+            // Announcement for near winners (Sync)
+            const nearWinners = d.nearWinners || [];
+            nearWinners.forEach(name => {
+                if (!localAnnounced4Hits.has(name)) {
+                    speakText(`Atentos que a ${name} le falta uno para ganar`);
+                    localAnnounced4Hits.add(name);
+                }
+            });
+
             if (winnerInfo && !isRoundFinished) {
                 showWinnerOverlay(winnerInfo);
             }
@@ -159,6 +169,7 @@ function syncGameState(extra = {}) {
         ganador: winnerInfo,
         raffleWinnerIds: raffleWinnerIds,
         raffleActive: isRaffleActive,
+        nearWinners: Array.from(announced4Hits),
         ...extra
     });
 }
@@ -275,6 +286,7 @@ function startNewRound() {
     isRoundFinished = false;
     winnerInfo = null;
     announced4Hits = new Set();
+    localAnnounced4Hits = new Set();
 
     // Acumulado Logic: Incrementar por jugador
     const increment = players.length * 1000;
@@ -400,8 +412,8 @@ function checkWinners() {
         
         // 4 hits announcement
         if (hits === 4 && !announced4Hits.has(p.name) && !isRoundFinished) {
-            speakText(`Atentos que a ${p.name} le falta uno para ganar`);
             announced4Hits.add(p.name);
+            syncGameState();
         }
 
         if (hits === 5 && !isRoundFinished) {
@@ -486,6 +498,8 @@ function init() {
         isRoundFinished = false;
         if (!isPlayerMode) {
             winnerInfo = null; drawnBalls = [];
+            announced4Hits = new Set();
+            localAnnounced4Hits = new Set();
             syncGameState();
             startBtn.disabled = false;
         }
