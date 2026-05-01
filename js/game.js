@@ -36,6 +36,7 @@ let winnerInfo = null;
 let raffleWinnerIds = [];
 let lastBallSpoken = 0;
 let isRaffleActive = false;
+let announced4Hits = new Set();
 
 const isPlayerMode = new URLSearchParams(window.location.search).get('mode') === 'player';
 
@@ -163,12 +164,22 @@ function syncGameState(extra = {}) {
 }
 
 function updateMasterBoardUI() {
-    for (let i = 1; i <= 90; i++) {
-        const mc = document.getElementById(`master-cell-${i}`);
-        if (mc) {
-            if (drawnBalls.includes(i)) mc.classList.add('called');
-            else mc.classList.remove('called');
-        }
+    const mb = document.getElementById('masterBoard');
+    const countDisplay = document.getElementById('ballCountDisplay');
+    if (countDisplay) countDisplay.textContent = drawnBalls.length;
+    
+    if (!mb) return;
+    mb.innerHTML = '';
+    
+    // Show last 10 balls
+    const last10 = drawnBalls.slice(-10).reverse(); // Reverse to show newest first
+    
+    for (let i = 0; i < 10; i++) {
+        const ball = last10[i];
+        const cell = document.createElement('div');
+        cell.className = 'master-cell' + (ball ? ' called' : '');
+        cell.textContent = ball || '-';
+        mb.appendChild(cell);
     }
 }
 
@@ -263,6 +274,7 @@ function startNewRound() {
     drawnBalls = [];
     isRoundFinished = false;
     winnerInfo = null;
+    announced4Hits = new Set();
 
     // Acumulado Logic: Incrementar por jugador
     const increment = players.length * 1000;
@@ -385,6 +397,13 @@ function checkWinners() {
     const base = (players.length * 4000) * 0.7;
     participants.forEach(p => {
         const hits = (p.carton || []).filter(n => drawnBalls.includes(n)).length;
+        
+        // 4 hits announcement
+        if (hits === 4 && !announced4Hits.has(p.name) && !isRoundFinished) {
+            speakText(`Atentos que a ${p.name} le falta uno para ganar`);
+            announced4Hits.add(p.name);
+        }
+
         if (hits === 5 && !isRoundFinished) {
             isRoundFinished = true;
             const wonJackpot = raffleWinnerIds.includes(p.name);
@@ -474,8 +493,7 @@ function init() {
 
     setupFirebaseSync();
     createCageBalls();
-    const mb = document.getElementById('masterBoard');
-    if (mb) { mb.innerHTML = ''; for(let i=1; i<=90; i++) mb.innerHTML += `<div class="master-cell" id="master-cell-${i}">${i}</div>`; }
+    updateMasterBoardUI(); // Initialize with empty slots
 }
 
 window.addEventListener('DOMContentLoaded', init);
