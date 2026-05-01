@@ -533,84 +533,87 @@ main {
 /* MOBILE RESPONSIVE LAYOUT */
 @media (max-width: 768px) {
     header {
-        flex-direction: column;
-        padding: 15px;
-        gap: 15px;
+        padding: 8px 15px;
+        gap: 5px;
         position: static;
     }
     .logo h1 {
-        font-size: 1.8rem;
+        font-size: 1.4rem;
         text-align: center;
     }
     .status-bar {
-        width: 100%;
-        justify-content: space-around;
-        gap: 10px;
+        gap: 5px;
     }
     .status-label {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
     }
     .status-value {
-        font-size: 1.3rem;
+        font-size: 1.1rem;
     }
     main {
-        padding: 15px 10px;
-        gap: 20px;
+        padding: 10px 5px;
+        gap: 10px;
         display: flex;
         flex-direction: column;
     }
+    .caller-section {
+        padding: 10px;
+        gap: 10px;
+    }
     .bingo-cage-container {
-        width: 120px;
-        height: 120px;
-        margin: 10px auto;
+        width: 100px;
+        height: 100px;
+        margin: 5px auto;
     }
     .current-ball {
-        width: 80px;
-        height: 80px;
-        font-size: 2.5rem;
+        width: 70px;
+        height: 70px;
+        font-size: 2rem;
     }
     .master-board {
         grid-template-columns: repeat(10, 1fr);
         gap: 2px;
+        padding: 5px;
     }
     .master-cell {
-        font-size: 0.6rem;
+        font-size: 0.8rem;
         padding: 2px;
+    }
+    .status-label[style*="text-align: center"] {
+        margin-bottom: 5px !important;
+        font-size: 0.7rem;
+    }
+    .raffle-box {
+        padding: 8px !important;
+        margin-top: 5px !important;
+    }
+    .raffle-name {
+        font-size: 1rem !important;
+        margin: 5px 0 !important;
     }
     .cards-grid {
         grid-template-columns: 1fr;
         max-height: none;
         overflow-y: visible;
+        padding: 5px;
     }
-    .section-header {
-        align-items: stretch !important;
+    .player-card {
+        padding: 6px;
     }
-    .section-header > div:first-child {
-        flex-direction: column;
-        gap: 10px;
+    .number-capsule {
+        height: 24px;
+        font-size: 0.7rem;
     }
     #startBtn {
         width: 100%;
-        font-size: 1rem;
-        padding: 10px;
+        font-size: 0.9rem;
+        padding: 8px;
     }
     .registration-box {
-        flex-direction: column;
-    }
-    #addPlayerBtn {
-        width: 100%;
-    }
-    .raffle-box {
-        margin-top: 20px;
+        padding: 8px !important;
     }
     .winner-title {
-        font-size: 3.5rem;
-    }
-    .winner-name {
-        font-size: 2rem;
-    }
-    .winner-prize {
-        font-size: 1.8rem;
+        font-size: 2.5rem;
     }
 }
 
